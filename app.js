@@ -150,8 +150,6 @@
     loginPassword: document.getElementById('loginPassword'),
     togglePasswordBtn: document.getElementById('togglePasswordBtn'),
     loginError: document.getElementById('loginError'),
-    demoAdminBtn: document.getElementById('demoAdminBtn'),
-    demoViewerBtn: document.getElementById('demoViewerBtn'),
     currentUserBadge: document.getElementById('currentUserBadge'),
     currentUsernameLabel: document.getElementById('currentUsernameLabel'),
     currentUserRoleTag: document.getElementById('currentUserRoleTag'),
@@ -234,7 +232,66 @@
     }
   }
 
-  const SEEDED_KEY = 'daily_task_scheduler_seeded_v1';
+  /* -------------------- Cloud Database Sync (Neon & Vercel) -------------------- */
+
+  let isSyncing = false;
+
+  async function syncTasksFromServer() {
+    if (isSyncing) return false;
+    isSyncing = true;
+    try {
+      const res = await fetch('/api/tasks');
+      if (!res.ok) throw new Error('API returned ' + res.status);
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.tasks)) {
+        state.tasks = data.tasks;
+        saveTasksLocally();
+        render();
+        return true;
+      }
+    } catch {
+      // Offline or local preview fallback
+    } finally {
+      isSyncing = false;
+    }
+    return false;
+  }
+
+  async function pushTaskToServer(task) {
+    if (!task) return;
+    try {
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task)
+      });
+    } catch {
+      // Offline fallback
+    }
+  }
+
+  async function syncBulkToServer(tasks) {
+    try {
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks: tasks || [] })
+      });
+    } catch {
+      // Offline fallback
+    }
+  }
+
+  async function deleteTaskFromServer(id) {
+    if (!id) return;
+    try {
+      await fetch(`/api/tasks?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+    } catch {
+      // Offline fallback
+    }
+  }
 
   function loadTasks() {
     const todayKey = Core.formatDateKey(new Date());
@@ -242,26 +299,24 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw !== null) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-      if (!localStorage.getItem(SEEDED_KEY)) {
-        localStorage.setItem(SEEDED_KEY, 'true');
-        const initial = Core.createSampleTasks(todayKey);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-        return initial;
-      }
-      return [];
     } catch {
-      return [];
+      // ignore
+    }
+    return Core.createSampleTasks(todayKey);
+  }
+
+  function saveTasksLocally() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+    } catch {
+      // ignore
     }
   }
 
   function saveTasks() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
-    } catch {
-      showToast('Could not save to browser storage.');
-    }
+    saveTasksLocally();
   }
 
   function initTheme() {
@@ -385,6 +440,7 @@
     state.tasks = res.tasks;
     saveTasks();
     render();
+    pushTaskToServer(res.task);
     showToast(`Added "${res.task.title}"`);
     return true;
   }
@@ -400,6 +456,7 @@
     state.tasks = res.tasks;
     saveTasks();
     render();
+    pushTaskToServer(res.task);
     showToast(`Updated "${res.task.title}"`);
     return true;
   }
@@ -411,11 +468,13 @@
     state.tasks = res.tasks;
     saveTasks();
     render();
+    deleteTaskFromServer(id);
 
     showToast(`Removed "${res.removed.title}"`, () => {
       state.tasks = previousTasks;
       saveTasks();
       render();
+      pushTaskToServer(res.removed);
       showToast(`Restored "${res.removed.title}"`);
     });
   }
@@ -426,6 +485,7 @@
     state.tasks = res.tasks;
     saveTasks();
     render();
+    pushTaskToServer(res.task);
     showToast(`Follow-up scheduled for ${Core.formatTime12h(res.task.startTime)} (+${hours || 2}h)`);
   }
 
@@ -435,6 +495,7 @@
     state.tasks = res.tasks;
     saveTasks();
     render();
+    pushTaskToServer(res.task);
     showToast(`Moved "${res.task.title}" to ${formatDisplayDate(targetDate)}`);
   }
 
@@ -444,6 +505,7 @@
     state.tasks = res.tasks;
     saveTasks();
     render();
+    syncBulkToServer(state.tasks);
     showToast(`Moved ${res.movedCount} overdue task${res.movedCount === 1 ? '' : 's'} to ${formatDisplayDate(state.selectedDate)}`);
   }
 
@@ -453,6 +515,7 @@
     state.tasks = res.tasks;
     saveTasks();
     render();
+    pushTaskToServer(res.task);
   }
 
   function handleClearCompleted() {
@@ -462,11 +525,13 @@
     state.tasks = res.tasks;
     saveTasks();
     render();
+    syncBulkToServer(state.tasks);
 
     showToast(`Cleared ${res.removedCount} completed task${res.removedCount === 1 ? '' : 's'}`, () => {
       state.tasks = previousTasks;
       saveTasks();
       render();
+      syncBulkToServer(state.tasks);
       showToast('Restored cleared tasks');
     });
   }
@@ -864,9 +929,29 @@
     body.appendChild(meta);
 
     if (task.notes) {
-      const notesEl = document.createElement('p');
+      const notesEl = document.createElement('div');
       notesEl.className = 'task-notes';
-      notesEl.textContent = task.notes;
+      const lines = String(task.notes).split('\n');
+      lines.forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const lineEl = document.createElement('div');
+        lineEl.className = 'note-line';
+        const match = /^([A-Za-z0-9\s#/-]+):(.*)$/.exec(trimmed);
+        if (match) {
+          const keySpan = document.createElement('span');
+          keySpan.className = 'note-key';
+          keySpan.textContent = match[1].trim() + ':';
+          const valSpan = document.createElement('span');
+          valSpan.className = 'note-val';
+          valSpan.textContent = match[2].trim();
+          lineEl.appendChild(keySpan);
+          lineEl.appendChild(valSpan);
+        } else {
+          lineEl.textContent = trimmed;
+        }
+        notesEl.appendChild(lineEl);
+      });
       body.appendChild(notesEl);
     }
 
@@ -1533,20 +1618,6 @@
       showToast('Signed out successfully.');
     });
 
-    els.demoAdminBtn.addEventListener('click', () => {
-      els.loginUsername.value = 'admin';
-      els.loginPassword.value = 'PkKhi3571592580';
-      els.loginError.hidden = true;
-      els.loginPassword.focus();
-    });
-
-    els.demoViewerBtn.addEventListener('click', () => {
-      els.loginUsername.value = 'viewer';
-      els.loginPassword.value = 'qwerZ@123';
-      els.loginError.hidden = true;
-      els.loginPassword.focus();
-    });
-
     let passwordShown = false;
     els.togglePasswordBtn.addEventListener('click', () => {
       passwordShown = !passwordShown;
@@ -1613,6 +1684,11 @@
         );
       }
     }, 60000);
+    // Cloud sync with Neon database & Vercel
+    syncTasksFromServer();
+    // Poll every 4 seconds to sync admin changes with viewer in real-time
+    setInterval(syncTasksFromServer, 4000);
+    window.addEventListener('focus', syncTasksFromServer);
   }
 
   initTheme();

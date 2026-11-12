@@ -1,0 +1,16 @@
+{
+  "name": "dayflow-task-tracker",
+  "version": "1.0.0",
+  "description": "Dayflow Daily Task Scheduler & Store Support Tracker with Neon Cloud Database and RBAC",
+  "scripts": {
+    "test": "node --test scheduler.test.js"
+  },
+  "keywords": [
+    "task-tracker",
+    "scheduler",
+    "neon",
+    "vercel"
+  ],
+  "author": "Yasin Adnan <yaseenadnan2580@gmail.com>",
+  "license": "MIT"
+}

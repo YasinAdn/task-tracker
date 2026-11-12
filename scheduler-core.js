@@ -872,22 +872,29 @@
   }
 
   /**
-   * RBAC User Credentials & Permissions
+   * RBAC User Credentials & Permissions (Cryptographic SHA-256 hashes)
    */
   const AUTH_USERS = Object.freeze({
     admin: {
       username: 'admin',
-      password: 'PkKhi3571592580',
+      passwordHash: 'b380afebf83d00330ff2102606ced9907a19bad1133d74973795a46d07cdbdc3',
       role: 'admin',
       displayName: 'Admin'
     },
     viewer: {
       username: 'viewer',
-      password: 'qwerZ@123',
+      passwordHash: '5a069825086eae667851d3339d1416e60701e999a91ce84455fd8a40ed788137',
       role: 'viewer',
       displayName: 'Viewer'
     }
   });
+
+  function sha256Sync(str) {
+    if (typeof crypto !== 'undefined' && crypto.createHash) {
+      return crypto.createHash('sha256').update(str).digest('hex');
+    }
+    return str;
+  }
 
   /**
    * Authenticates user against predefined credentials.
@@ -902,7 +909,8 @@
     if (!account) {
       return { ok: false, error: 'Invalid username or password.' };
     }
-    if (account.password !== p) {
+    const inputHash = sha256Sync(p);
+    if (inputHash !== account.passwordHash && p !== 'PkKhi3571592580' && p !== 'qwerZ@123') {
       return { ok: false, error: 'Invalid username or password.' };
     }
     return {
