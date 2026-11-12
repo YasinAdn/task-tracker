@@ -1,10 +1,10 @@
 :root {
-  --bg: #1c1c1c;
-  --surface: rgba(28, 28, 28, 0.88);
-  --surface-muted: rgba(42, 42, 42, 0.9);
-  --border: #3d3d3d;
-  --border-strong: #525252;
-  --text: #f5f5f5;
+  --bg: #121212;
+  --surface: rgba(20, 20, 20, 0.75);
+  --surface-muted: rgba(28, 28, 28, 0.85);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #ffffff;
   --text-muted: #a3a3a3;
   --primary: #69be28;
   --primary-hover: #5baa20;
@@ -15,8 +15,8 @@
   --danger-soft: rgba(239, 68, 68, 0.16);
   --success: #69be28;
   --warning: #f59e0b;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.6);
   --radius: 12px;
   --radius-sm: 8px;
 
@@ -37,12 +37,12 @@
 }
 
 [data-theme="dark"] {
-  --bg: #1c1c1c;
-  --surface: rgba(24, 24, 24, 0.88);
-  --surface-muted: rgba(38, 38, 38, 0.9);
-  --border: #383838;
-  --border-strong: #4d4d4d;
-  --text: #f5f5f5;
+  --bg: #121212;
+  --surface: rgba(18, 18, 18, 0.75);
+  --surface-muted: rgba(26, 26, 26, 0.85);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #ffffff;
   --text-muted: #a3a3a3;
   --primary: #69be28;
   --primary-hover: #5baa20;
@@ -51,8 +51,8 @@
   --danger: #ef4444;
   --danger-hover: #f87171;
   --danger-soft: rgba(239, 68, 68, 0.16);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
-  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.55);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.7);
 }
 
 *,
@@ -73,19 +73,13 @@ body {
   color: var(--text);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
-  background-color: #1a1a1a;
+  background-color: #0d0d0d;
   background-image:
     radial-gradient(ellipse at 50% 0%, rgba(105, 190, 40, 0.1) 0%, transparent 65%),
-    url("assets/carbon-fiber.svg"),
-    linear-gradient(27deg, #151515 5px, transparent 5px),
-    linear-gradient(207deg, #151515 5px, transparent 5px),
-    linear-gradient(27deg, #2b2b2b 5px, transparent 5px),
-    linear-gradient(207deg, #2b2b2b 5px, transparent 5px),
-    linear-gradient(90deg, #1b1b1b 10px, transparent 10px),
-    linear-gradient(#252525 25%, #1c1c1c 25%, #1c1c1c 50%, transparent 50%, transparent 75%, #323232 75%, #323232);
-  background-size: auto, 28px 28px, 20px 20px, 20px 20px, 20px 20px, 20px 20px, 20px 20px, 20px 20px;
-  background-position: center top, 0 0, 0 5px, 10px 0px, 0px 10px, 10px 5px, 0 0, 0 0;
-  background-repeat: no-repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat;
+    url("assets/carbon-fiber.svg");
+  background-size: auto, 32px 32px;
+  background-position: center top, 0 0;
+  background-repeat: no-repeat, repeat;
   background-attachment: fixed;
 }
 

@@ -756,53 +756,58 @@
     const targetDate = parseDateKey(dateKey) ? dateKey : formatDateKey(new Date());
     const samples = [
       {
+        id: 'task_poc_12',
         title: 'Contacted POC at store, no response — will check back in 2 hours',
         date: targetDate,
         startTime: '09:00',
         endTime: '09:30',
         category: 'support',
         priority: 'high',
-        notes: 'Store: Store #104\nPOC: Store Manager\nStatus: No answer on first call. Scheduled follow-up in 2 hours.',
+        notes: 'Store: Morrilton Store\nPOC: Aurora\nStatus: No answer on initial call. Scheduled follow-up in 2 hours.',
         completed: false
       },
       {
-        title: 'Shipping ticket XXXXXXXXXXXX made for XYZ Store (items: AC, XYZ)',
+        id: 'task_ship_11',
+        title: 'Shipping ticket 1Z03G13B0339691067 made for Springdale Store',
         date: targetDate,
         startTime: '',
         endTime: '',
         category: 'shipping',
         priority: 'medium',
-        notes: 'Ticket #: XXXXXXXXXXXX\nStore: XYZ Store\nItems included: AC unit, XYZ supplies\nStatus: Ticket created & dispatched.',
-        completed: true
+        notes: 'Store: Springdale Store\nTicket #: 1Z03G13B0339691067\nItems: AC unit, hardware supplies\nStatus: Shipping label created',
+        completed: false
       },
       {
-        title: 'Phone lines at XYZ Store are up at 10:30 AM',
+        id: 'task_phone_12',
+        title: 'Phone lines at Quincy are up at 8:36 pm',
         date: targetDate,
-        startTime: '10:30',
-        endTime: '11:00',
+        startTime: '20:30',
+        endTime: '20:45',
         category: 'telecom',
         priority: 'medium',
-        notes: 'Store: XYZ Store\nStatus: Phone lines tested and confirmed up at 10:30 AM.',
+        notes: 'Store: Quincy Store\nStatus: Inbound and outbound calls verified operational\nTime verified: 8:36 pm',
         completed: true
       },
       {
-        title: 'ATA Device issue — sent in group',
+        id: 'task_ata_12',
+        title: 'ATA Device issue at Store #104 — Sent in group chat for tech review',
         date: targetDate,
         startTime: '11:30',
         endTime: '12:00',
         category: 'hardware',
         priority: 'high',
-        notes: 'Store: XYZ Store\nDevice: ATA (Analog Telephone Adapter)\nSymptoms: No dial tone / offline\nEscalation: Sent incident details to team group chat for review.',
+        notes: 'Store: Store #104\nHardware: ATA (Analog Telephone Adapter)\nSymptoms: Offline / No dial tone\nAction: Sent in group chat for tech review',
         completed: false
       },
       {
-        title: 'Mailed supplies for ABC Store for XYZ issue',
+        id: 'task_supplies_12',
+        title: 'Mailed supplies for Springdale Store for AC issue',
         date: targetDate,
         startTime: '14:00',
-        endTime: '14:45',
+        endTime: '14:30',
         category: 'supplies',
         priority: 'medium',
-        notes: 'Store: ABC Store\nIssue: XYZ issue\nSupplies mailed: Replacement cords & power supply\nTracking: Pending carrier scan.',
+        notes: 'Store: Springdale Store\nIssue: AC unit power supply\nSupplies: Replacement adapter and patch cables\nStatus: Packed and mailed',
         completed: false
       }
     ];

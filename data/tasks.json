@@ -1,0 +1,67 @@
+[
+  {
+    "id": "task_ship_11",
+    "title": "Shipping ticket 1Z03G13B0339691067 made for Springdale Store",
+    "date": "2026-11-11",
+    "startTime": "",
+    "endTime": "",
+    "category": "shipping",
+    "priority": "medium",
+    "notes": "Store: Springdale Store\nTicket #: 1Z03G13B0339691067\nItems: AC unit, hardware supplies\nStatus: Shipping label created",
+    "completed": false,
+    "createdAt": "2026-11-11T10:00:00.000Z",
+    "updatedAt": "2026-11-11T10:00:00.000Z"
+  },
+  {
+    "id": "task_phone_12",
+    "title": "Phone lines at Quincy are up at 8:36 pm",
+    "date": "2026-11-12",
+    "startTime": "20:30",
+    "endTime": "20:45",
+    "category": "telecom",
+    "priority": "medium",
+    "notes": "Store: Quincy\nStatus: Inbound and outbound calls verified operational\nTime verified: 8:36 pm",
+    "completed": true,
+    "createdAt": "2026-11-12T20:30:00.000Z",
+    "updatedAt": "2026-11-12T20:45:00.000Z"
+  },
+  {
+    "id": "task_poc_12",
+    "title": "Contacted POC at Morrilton, no response — will check back in 15 mins",
+    "date": "2026-11-12",
+    "startTime": "21:00",
+    "endTime": "21:15",
+    "category": "support",
+    "priority": "high",
+    "notes": "Store: Morrilton\nPOC: Aurora\nStatus: Messaged on whatsapp. Missed Campaign. Scheduled follow-up in 1 hours.",
+    "completed": false,
+    "createdAt": "2026-11-12T21:00:00.000Z",
+    "updatedAt": "2026-11-12T21:00:00.000Z"
+  },
+  {
+    "id": "task_ata_12",
+    "title": "ATA Device issue at Store #104 — Sent in group chat for tech review",
+    "date": "2026-11-12",
+    "startTime": "11:30",
+    "endTime": "12:00",
+    "category": "hardware",
+    "priority": "high",
+    "notes": "Store: Store #104\nHardware: ATA (Analog Telephone Adapter)\nSymptoms: Offline / No dial tone\nAction: Sent in group chat for tech review",
+    "completed": false,
+    "createdAt": "2026-11-12T11:30:00.000Z",
+    "updatedAt": "2026-11-12T11:30:00.000Z"
+  },
+  {
+    "id": "task_supplies_12",
+    "title": "Mailed supplies for Springdale Store for AC issue",
+    "date": "2026-11-12",
+    "startTime": "14:00",
+    "endTime": "14:30",
+    "category": "supplies",
+    "priority": "medium",
+    "notes": "Store: Springdale Store\nIssue: AC unit power supply\nSupplies: Replacement adapter and patch cables\nStatus: Packed and mailed",
+    "completed": false,
+    "createdAt": "2026-11-12T14:00:00.000Z",
+    "updatedAt": "2026-11-12T14:00:00.000Z"
+  }
+]

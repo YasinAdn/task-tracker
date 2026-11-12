@@ -232,7 +232,7 @@
     }
   }
 
-  /* -------------------- Cloud Database Sync (Neon & Vercel) -------------------- */
+  /* -------------------- Codebase Storage & Server Sync -------------------- */
 
   let isSyncing = false;
 
@@ -244,13 +244,31 @@
       if (!res.ok) throw new Error('API returned ' + res.status);
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.tasks)) {
-        state.tasks = data.tasks;
-        saveTasksLocally();
-        render();
-        return true;
+        if (data.tasks.length > 0) {
+          state.tasks = data.tasks;
+          saveTasksLocally();
+          render();
+          return true;
+        } else if (state.tasks && state.tasks.length > 0) {
+          // If server returns empty list (e.g. fresh lambda), re-seed server from client!
+          syncBulkToServer(state.tasks);
+          return true;
+        } else {
+          // Both are empty; load sample tasks
+          state.tasks = Core.createSampleTasks(state.selectedDate);
+          saveTasksLocally();
+          render();
+          syncBulkToServer(state.tasks);
+          return true;
+        }
       }
     } catch {
-      // Offline or local preview fallback
+      // Offline or static fallback: ensure tasks are never blank
+      if (!state.tasks || state.tasks.length === 0) {
+        state.tasks = Core.createSampleTasks(state.selectedDate);
+        saveTasksLocally();
+        render();
+      }
     } finally {
       isSyncing = false;
     }
@@ -1388,10 +1406,14 @@
 
     function loadSampleDay() {
       const samples = Core.createSampleTasks(state.selectedDate);
-      state.tasks = [...state.tasks, ...samples];
+      // Remove any existing duplicate IDs before appending
+      const existingIds = new Set(state.tasks.map((t) => t.id));
+      const newItems = samples.filter((s) => !existingIds.has(s.id));
+      state.tasks = [...state.tasks, ...newItems];
       saveTasks();
       render();
-      showToast(`Loaded ${samples.length} store tasks for ${state.selectedDate}`);
+      syncBulkToServer(state.tasks);
+      showToast(`Loaded ${newItems.length || samples.length} store tasks for ${state.selectedDate}`);
     }
     els.loadSampleBtn.addEventListener('click', loadSampleDay);
     els.emptySampleBtn.addEventListener('click', loadSampleDay);
@@ -1684,11 +1706,23 @@
         );
       }
     }, 60000);
-    // Cloud sync with Neon database & Vercel
+    // Cloud sync with codebase storage & Vercel
     syncTasksFromServer();
     // Poll every 4 seconds to sync admin changes with viewer in real-time
     setInterval(syncTasksFromServer, 4000);
     window.addEventListener('focus', syncTasksFromServer);
+    // Instant cross-tab sync between admin and viewer
+    window.addEventListener('storage', (e) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            state.tasks = parsed;
+            render();
+          }
+        } catch {}
+      }
+    });
   }
 
   initTheme();
