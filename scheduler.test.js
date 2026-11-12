@@ -513,3 +513,83 @@ test('Follow-up notification: 15-minute snooze and getTaskFollowupTime calculati
   const snoozedDueMs = Core.getTaskFollowupTime(snoozed);
   assert.equal(snoozedDueMs, Date.parse(snoozed.remindAt));
 });
+
+test('Global search: searches everything across all dates and fields, not restricted by date', () => {
+  const sampleTasks = [
+    {
+      id: 'task_past',
+      title: 'ATA Device issue at Store #104 — Sent in group chat for tech review',
+      date: '2026-11-10',
+      startTime: '11:30',
+      endTime: '12:00',
+      category: 'telecom',
+      priority: 'high',
+      notes: 'Store: Store #104\nHardware: ATA (Analog Telephone Adapter)\nSymptoms: Offline / No dial tone',
+      scope: 'work',
+      completed: true
+    },
+    {
+      id: 'task_yesterday',
+      title: 'Contacted POC at Morrilton, no response — will check back in 15 mins',
+      date: '2026-11-12',
+      startTime: '21:00',
+      endTime: '21:15',
+      category: 'support',
+      priority: 'high',
+      notes: 'Store: Morrilton\nPOC: Aurora\nStatus: Messaged on whatsapp. Scheduled follow-up in 15 mins.',
+      scope: 'work',
+      completed: false
+    },
+    {
+      id: 'task_future',
+      title: 'Mailed supplies for Springdale Store for AC issue',
+      date: '2026-11-15',
+      startTime: '14:00',
+      endTime: '14:30',
+      category: 'supplies',
+      priority: 'medium',
+      notes: 'Store: Springdale Store\nIssue: AC unit power supply\nSupplies: Replacement adapter and patch cables',
+      scope: 'work',
+      completed: false
+    },
+    {
+      id: 'task_personal',
+      title: 'Pick up medical supplies for pharmacy order #8841',
+      date: '2026-11-13',
+      startTime: '',
+      endTime: '',
+      category: 'errands',
+      priority: 'medium',
+      notes: 'Pharmacy prescription pickup',
+      scope: 'personal',
+      completed: false
+    }
+  ];
+
+  // Searching "104" while on date "2026-11-13" must find task_past from 2026-11-10 even though it is completed on a past date!
+  const res104 = Core.filterAndSortTasks(sampleTasks, { date: '2026-11-13', search: '104' });
+  assert.equal(res104.isSearchMode, true);
+  assert.equal(res104.all.length, 1);
+  assert.equal(res104.all[0].id, 'task_past');
+
+  // Searching "ATA" matches title and notes across all dates
+  const resAta = Core.filterAndSortTasks(sampleTasks, { date: '2026-11-13', search: 'ATA' });
+  assert.equal(resAta.all.length, 1);
+  assert.equal(resAta.all[0].id, 'task_past');
+
+  // Multi-term search: "Springdale AC" matches task_future
+  const resAc = Core.filterAndSortTasks(sampleTasks, { date: '2026-11-13', search: 'Springdale AC' });
+  assert.equal(resAc.all.length, 1);
+  assert.equal(resAc.all[0].id, 'task_future');
+
+  // Searching "supplies" matches across work and personal scopes
+  const resSupplies = Core.filterAndSortTasks(sampleTasks, { date: '2026-11-13', search: 'supplies' });
+  assert.equal(resSupplies.all.length, 2);
+  assert.ok(resSupplies.all.some((t) => t.id === 'task_future'));
+  assert.ok(resSupplies.all.some((t) => t.id === 'task_personal'));
+
+  // searchTasksGlobally helper function works with query and limit
+  const globalDirect = Core.searchTasksGlobally(sampleTasks, 'Morrilton');
+  assert.equal(globalDirect.length, 1);
+  assert.equal(globalDirect[0].id, 'task_yesterday');
+});

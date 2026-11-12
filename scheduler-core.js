@@ -625,8 +625,8 @@
    * Automatically includes incomplete tasks from earlier dates in `overdue` so active tickets are never lost.
    * Separates scheduled (with start/end time) and anytime (no start time) tasks.
    * @param {Array} tasks
-   * @param {Object} filters
-   * @returns {{ all: Array, overdue: Array, scheduled: Array, anytime: Array }}
+   * @param {Object} [filters]
+   * @returns {{ all: Array, overdue: Array, scheduled: Array, anytime: Array, searchResults?: Array, isSearchMode?: boolean }}
    */
   function filterAndSortTasks(tasks, filters) {
     const list = Array.isArray(tasks) ? tasks : [];
@@ -634,31 +634,74 @@
     const search = String(opts.search || '').trim().toLowerCase();
     const targetDate = opts.date || formatDateKey(new Date());
 
+    const isGlobalSearch = Boolean(search);
+    const searchTokens = isGlobalSearch ? search.split(/\s+/).filter(Boolean) : [];
+
     const overdue = [];
     const scheduled = [];
     const anytime = [];
+    const searchResults = [];
 
     for (const task of list) {
-      if (search) {
-        const haystack = `${task.title} ${task.notes || ''}`.toLowerCase();
-        if (!haystack.includes(search)) continue;
+      if (isGlobalSearch) {
+        const catObj = CATEGORIES[task.category];
+        const catName = catObj?.name || '';
+        const prioObj = PRIORITIES[task.priority];
+        const prioName = prioObj?.name || '';
+        const haystack = `${task.title || ''} ${task.notes || ''} ${task.category || ''} ${catName} ${task.priority || ''} ${prioName} ${task.date || ''} ${task.startTime || ''} ${task.endTime || ''}`.toLowerCase();
+        const matchesAll = searchTokens.every((token) => haystack.includes(token));
+        if (!matchesAll) continue;
       }
+
       const taskScope = task.scope === 'personal' ? 'personal' : 'work';
-      if (opts.scope && opts.scope !== 'all' && taskScope !== opts.scope) continue;
+      // When global search is active, search across all scopes by default unless strictScope is requested
+      if (!isGlobalSearch) {
+        if (opts.scope && opts.scope !== 'all' && taskScope !== opts.scope) continue;
+      } else if (opts.strictScope && opts.scope && opts.scope !== 'all' && taskScope !== opts.scope) {
+        continue;
+      }
+
       if (opts.category && opts.category !== 'all' && task.category !== opts.category) continue;
       if (opts.priority && opts.priority !== 'all' && task.priority !== opts.priority) continue;
       if (opts.status === 'pending' && task.completed) continue;
       if (opts.status === 'completed' && !task.completed) continue;
 
-      if (task.date === targetDate) {
-        if (task.startTime) {
-          scheduled.push(task);
-        } else {
-          anytime.push(task);
+      if (isGlobalSearch) {
+        searchResults.push(task);
+      } else {
+        if (task.date === targetDate) {
+          if (task.startTime) {
+            scheduled.push(task);
+          } else {
+            anytime.push(task);
+          }
+        } else if (task.date < targetDate && !task.completed && opts.includeOverdue !== false) {
+          overdue.push(task);
         }
-      } else if (task.date < targetDate && !task.completed && opts.includeOverdue !== false) {
-        overdue.push(task);
       }
+    }
+
+    if (isGlobalSearch) {
+      // Sort global search results: incomplete first, newest date first, then by time and priority
+      searchResults.sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        const dateDiff = String(b.date || '').localeCompare(String(a.date || ''));
+        if (dateDiff !== 0) return dateDiff;
+        const startDiff = (timeToMinutes(a.startTime) || 0) - (timeToMinutes(b.startTime) || 0);
+        if (startDiff !== 0) return startDiff;
+        const weightDiff = (PRIORITIES[b.priority]?.weight || 0) - (PRIORITIES[a.priority]?.weight || 0);
+        if (weightDiff !== 0) return weightDiff;
+        return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+      });
+
+      return {
+        all: searchResults,
+        searchResults,
+        overdue: [],
+        scheduled: searchResults.filter((t) => t.startTime),
+        anytime: searchResults.filter((t) => !t.startTime),
+        isSearchMode: true
+      };
     }
 
     overdue.sort((a, b) => {
@@ -688,8 +731,28 @@
       all: [...overdue, ...scheduled, ...anytime],
       overdue,
       scheduled,
-      anytime
+      anytime,
+      isSearchMode: false
     };
+  }
+
+  /**
+   * Performs an instant global search across all tasks, regardless of date.
+   * Searches title, notes, store name, ticket numbers, ATA, category, priority, and date.
+   * @param {Array} tasks
+   * @param {string} query
+   * @param {Object} [options] - e.g. { scope, limit, strictScope }
+   * @returns {Array} Matching tasks sorted by relevance and date
+   */
+  function searchTasksGlobally(tasks, query, options = {}) {
+    const q = String(query || '').trim();
+    if (!q) return [];
+    const res = filterAndSortTasks(tasks, { search: q, ...options });
+    const list = res.searchResults || res.all || [];
+    if (options.limit && options.limit > 0) {
+      return list.slice(0, options.limit);
+    }
+    return list;
   }
 
   /**
@@ -1262,6 +1325,7 @@
     toggleTaskCompletion,
     clearCompletedForDate,
     filterAndSortTasks,
+    searchTasksGlobally,
     computeTimelineLayout,
     computeDailyStats,
     createSampleTasks,

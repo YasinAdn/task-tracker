@@ -28,6 +28,8 @@
       priority: 'all',
       search: ''
     },
+    compactView: localStorage.getItem('dayflow_compact_view') === 'true',
+    sidebarCollapsed: localStorage.getItem('dayflow_sidebar_collapsed') === 'true',
     timelineScrolledOnce: false
   };
 
@@ -39,6 +41,12 @@
     nextDayBtn: document.getElementById('nextDayBtn'),
     datePicker: document.getElementById('datePicker'),
     searchInput: document.getElementById('searchInput'),
+    searchClearInlineBtn: document.getElementById('searchClearInlineBtn'),
+    searchInstantDropdown: document.getElementById('searchInstantDropdown'),
+    searchDropdownCount: document.getElementById('searchDropdownCount'),
+    searchDropdownCloseBtn: document.getElementById('searchDropdownCloseBtn'),
+    searchDropdownList: document.getElementById('searchDropdownList'),
+    searchDropdownViewAllBtn: document.getElementById('searchDropdownViewAllBtn'),
     openAddModalBtn: document.getElementById('openAddModalBtn'),
     mobileAddFab: document.getElementById('mobileAddFab'),
     topbarExportBtn: document.getElementById('topbarExportBtn'),
@@ -66,7 +74,11 @@
     workCountBadge: document.getElementById('workCountBadge'),
     personalCountBadge: document.getElementById('personalCountBadge'),
 
-    // Quick add form
+    // Quick add form & collapsible sidebar
+    quickAddCard: document.getElementById('quickAddCard'),
+    quickAddBody: document.getElementById('quickAddBody'),
+    sidebarToggleBtn: document.getElementById('sidebarToggleBtn'),
+    sidebarToggleIcon: document.getElementById('sidebarToggleIcon'),
     quickAddForm: document.getElementById('quickAddForm'),
     quickScopeInput: document.getElementById('quickScope'),
     quickTitle: document.getElementById('quickTitle'),
@@ -99,9 +111,12 @@
     importBtn: document.getElementById('importBtn'),
     importFileInput: document.getElementById('importFileInput'),
 
-    // Main panel
+    // Main panel toolbar & density
     viewListBtn: document.getElementById('viewListBtn'),
     viewTimelineBtn: document.getElementById('viewTimelineBtn'),
+    densityToggleBtn: document.getElementById('densityToggleBtn'),
+    densityToggleIcon: document.getElementById('densityToggleIcon'),
+    densityToggleLabel: document.getElementById('densityToggleLabel'),
     visibleCountLabel: document.getElementById('visibleCountLabel'),
     clearCompletedBtn: document.getElementById('clearCompletedBtn'),
 
@@ -112,6 +127,15 @@
     emptyStateText: document.getElementById('emptyStateText'),
     emptyAddBtn: document.getElementById('emptyAddBtn'),
     emptySampleBtn: document.getElementById('emptySampleBtn'),
+
+    // Global Search results section
+    searchSection: document.getElementById('searchSection'),
+    searchHeadingTitle: document.getElementById('searchHeadingTitle'),
+    searchCount: document.getElementById('searchCount'),
+    searchSubInfo: document.getElementById('searchSubInfo'),
+    clearSearchBtn: document.getElementById('clearSearchBtn'),
+    searchList: document.getElementById('searchList'),
+
     overdueSection: document.getElementById('overdueSection'),
     overdueCount: document.getElementById('overdueCount'),
     overdueList: document.getElementById('overdueList'),
@@ -518,6 +542,133 @@
     if (endInput) {
       const endMins = Math.min(23 * 60 + 59, dev.hours * 60 + dev.minutes + defaultDurationMinutes);
       endInput.value = Core.minutesToTime(endMins);
+    }
+  }
+
+  /* -------------------- Global Search & Density Helpers -------------------- */
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function highlightSearchMatches(text, query) {
+    const raw = escapeHtml(text);
+    if (!query) return raw;
+    const tokens = String(query).trim().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return raw;
+    const pattern = new RegExp(`(${tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+    return raw.replace(pattern, '<mark class="search-highlight">$1</mark>');
+  }
+
+  function extractSearchSnippet(notes, query) {
+    if (!notes) return '';
+    const clean = String(notes).replace(/\n/g, ' • ');
+    if (!query) return clean.length > 90 ? clean.slice(0, 90) + '…' : clean;
+    const lower = clean.toLowerCase();
+    const token = String(query).trim().split(/\s+/)[0]?.toLowerCase();
+    if (!token) return clean.length > 90 ? clean.slice(0, 90) + '…' : clean;
+    const idx = lower.indexOf(token);
+    if (idx === -1) return clean.length > 90 ? clean.slice(0, 90) + '…' : clean;
+    const start = Math.max(0, idx - 20);
+    const end = Math.min(clean.length, idx + token.length + 50);
+    return (start > 0 ? '…' : '') + clean.slice(start, end) + (end < clean.length ? '…' : '');
+  }
+
+  function renderInstantSearchDropdown(query) {
+    if (!els.searchInstantDropdown) return;
+    const q = String(query || '').trim();
+    if (!q) {
+      els.searchInstantDropdown.hidden = true;
+      if (els.searchClearInlineBtn) els.searchClearInlineBtn.hidden = true;
+      return;
+    }
+
+    if (els.searchClearInlineBtn) els.searchClearInlineBtn.hidden = false;
+
+    // Search across ALL tasks and ALL dates!
+    const matches = Core.searchTasksGlobally(state.tasks, q, { limit: 25 });
+    if (els.searchDropdownCount) {
+      els.searchDropdownCount.textContent = String(matches.length);
+    }
+
+    if (matches.length === 0) {
+      els.searchDropdownList.innerHTML = `
+        <div class="search-dropdown-empty">
+          <p>No tasks match <strong>"${escapeHtml(q)}"</strong> across any date.</p>
+          <span class="search-empty-sub">Search store #, ticket #, ATA, supplies, or note text.</span>
+        </div>
+      `;
+      els.searchInstantDropdown.hidden = false;
+      return;
+    }
+
+    els.searchDropdownList.replaceChildren(
+      ...matches.map((task) => {
+        const item = document.createElement('div');
+        item.className = 'search-dropdown-item' + (task.completed ? ' is-completed' : '');
+        item.dataset.taskId = task.id;
+        item.tabIndex = 0;
+
+        const prio = Core.PRIORITIES[task.priority] || Core.PRIORITIES.medium;
+        const isWork = task.scope !== 'personal';
+        const highlightedTitle = highlightSearchMatches(task.title, q);
+        const snippet = extractSearchSnippet(task.notes, q);
+
+        item.innerHTML = `
+          <div class="search-item-top">
+            <span class="search-item-scope ${isWork ? 'scope-work' : 'scope-personal'}">${isWork ? '💼 WORK' : '👤 PERSONAL'}</span>
+            <span class="search-item-date">📅 ${escapeHtml(formatShortDate(task.date))}</span>
+            ${task.startTime ? `<span class="search-item-time">⏰ ${escapeHtml(Core.formatTime12h(task.startTime))}</span>` : '<span class="search-item-time">Flexible</span>'}
+            <span class="search-item-prio prio-${task.priority}">${prio.label}</span>
+          </div>
+          <div class="search-item-title">${highlightedTitle}</div>
+          ${snippet ? `<div class="search-item-notes">${highlightSearchMatches(snippet, q)}</div>` : ''}
+        `;
+
+        item.addEventListener('click', () => {
+          openEditModal(task.id);
+          els.searchInstantDropdown.hidden = true;
+        });
+
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            openEditModal(task.id);
+            els.searchInstantDropdown.hidden = true;
+          }
+        });
+
+        return item;
+      })
+    );
+
+    els.searchInstantDropdown.hidden = false;
+  }
+
+  function applyCompactView(isCompact) {
+    document.body.classList.toggle('compact-density', Boolean(isCompact));
+    if (els.densityToggleBtn) {
+      els.densityToggleBtn.setAttribute('aria-pressed', String(Boolean(isCompact)));
+    }
+    if (els.densityToggleLabel) {
+      els.densityToggleLabel.textContent = isCompact ? 'Comfortable' : 'Compact';
+    }
+    if (els.densityToggleIcon) {
+      els.densityToggleIcon.textContent = isCompact ? '▤' : '≡';
+    }
+    render();
+  }
+
+  function applySidebarCollapsed(isCollapsed) {
+    if (!els.quickAddBody || !els.sidebarToggleBtn) return;
+    els.quickAddBody.classList.toggle('is-collapsed', Boolean(isCollapsed));
+    els.sidebarToggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
+    if (els.sidebarToggleIcon) {
+      els.sidebarToggleIcon.textContent = isCollapsed ? '+' : '−';
     }
   }
 
@@ -1177,12 +1328,16 @@
   const EDIT_ICON = '<path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>';
   const DELETE_ICON = '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>';
 
-  function buildTaskCard(task) {
-    const cat = Core.CATEGORIES[task.category] || Core.CATEGORIES.work;
+  function buildTaskCard(task, options = {}) {
+    const isSearchMode = Boolean(options.showDate || state.filters.search);
+    const cat = Core.CATEGORIES[task.category] || Core.CATEGORIES.support || Core.CATEGORIES.work;
     const prio = Core.PRIORITIES[task.priority] || Core.PRIORITIES.medium;
 
     const card = document.createElement('article');
-    card.className = 'task-card' + (task.completed ? ' is-completed' : '');
+    card.className =
+      'task-card' +
+      (task.completed ? ' is-completed' : '') +
+      (state.compactView ? ' compact-card' : '');
     card.style.setProperty('--cat-color', cat.color);
     card.dataset.taskId = task.id;
 
@@ -1203,8 +1358,25 @@
 
     const titleEl = document.createElement('span');
     titleEl.className = 'task-title';
-    titleEl.textContent = task.title;
+    if (state.filters.search) {
+      titleEl.innerHTML = highlightSearchMatches(task.title, state.filters.search);
+    } else {
+      titleEl.textContent = task.title;
+    }
     top.appendChild(titleEl);
+
+    if (isSearchMode || task.date !== state.selectedDate) {
+      const dateTag = document.createElement('button');
+      dateTag.type = 'button';
+      dateTag.className = 'task-date-badge';
+      dateTag.textContent = `📅 ${formatShortDate(task.date)}`;
+      dateTag.title = `Jump to schedule for ${formatDisplayDate(task.date)}`;
+      dateTag.addEventListener('click', (e) => {
+        e.stopPropagation();
+        changeDate(task.date);
+      });
+      top.appendChild(dateTag);
+    }
 
     const taskScope = task.scope === 'personal' ? 'personal' : 'work';
     const scopeTag = document.createElement('span');
@@ -1373,7 +1545,42 @@
   }
 
   function renderListView(grouped) {
+    const isSearch = Boolean(grouped.isSearchMode || state.filters.search);
     const totalVisible = grouped.all.length;
+
+    if (isSearch) {
+      els.emptyState.hidden = totalVisible > 0;
+      if (totalVisible === 0) {
+        els.emptyStateTitle.textContent = `No tasks match "${state.filters.search}"`;
+        els.emptyStateText.textContent =
+          'Searched all tasks across all dates, notes, and scopes. Try different keywords.';
+        els.emptySampleBtn.hidden = true;
+      }
+
+      if (els.overdueSection) els.overdueSection.hidden = true;
+      if (els.scheduledSection) els.scheduledSection.hidden = true;
+      if (els.anytimeSection) els.anytimeSection.hidden = true;
+
+      if (els.searchSection) {
+        els.searchSection.hidden = totalVisible === 0;
+        if (els.searchHeadingTitle) {
+          els.searchHeadingTitle.textContent = `All-Time Search: "${state.filters.search}"`;
+        }
+        if (els.searchCount) {
+          els.searchCount.textContent = String(totalVisible);
+        }
+        if (els.searchSubInfo) {
+          els.searchSubInfo.textContent = `Found ${totalVisible} matching task${totalVisible === 1 ? '' : 's'} across all dates (Work & Personal)`;
+        }
+        if (els.searchList) {
+          els.searchList.replaceChildren(...grouped.all.map((t) => buildTaskCard(t, { showDate: true })));
+        }
+      }
+      return;
+    }
+
+    if (els.searchSection) els.searchSection.hidden = true;
+
     const hasAnyForDate = state.tasks.some((t) => {
       const s = t.scope === 'personal' ? 'personal' : 'work';
       return t.date === state.selectedDate && s === state.activeScope;
@@ -1631,8 +1838,12 @@
     });
 
     const count = grouped.all.length;
-    const scopeLabel = state.activeScope === 'personal' ? 'Personal' : 'Work';
-    els.visibleCountLabel.textContent = `${count} ${scopeLabel} task${count === 1 ? '' : 's'}`;
+    if (state.filters.search) {
+      els.visibleCountLabel.textContent = `${count} result${count === 1 ? '' : 's'} (all dates)`;
+    } else {
+      const scopeLabel = state.activeScope === 'personal' ? 'Personal' : 'Work';
+      els.visibleCountLabel.textContent = `${count} ${scopeLabel} task${count === 1 ? '' : 's'}`;
+    }
 
     renderStats();
     renderListView(grouped);
@@ -1693,11 +1904,110 @@
       }
     });
 
-    // Search & Theme
-    els.searchInput.addEventListener('input', (e) => {
-      state.filters.search = e.target.value;
+    // Global Search & Zero-Scroll Instant Results
+    function handleSearchInput(value) {
+      const q = String(value || '').trim();
+      state.filters.search = q;
+      if (els.searchClearInlineBtn) {
+        els.searchClearInlineBtn.hidden = !q;
+      }
       render();
+      renderInstantSearchDropdown(q);
+      if (q && window.innerWidth <= 840) {
+        applySidebarCollapsed(true);
+      }
+    }
+
+    els.searchInput.addEventListener('input', (e) => {
+      handleSearchInput(e.target.value);
     });
+
+    els.searchInput.addEventListener('focus', () => {
+      if (els.searchInput.value.trim()) {
+        renderInstantSearchDropdown(els.searchInput.value.trim());
+      }
+    });
+
+    els.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        els.searchInput.value = '';
+        handleSearchInput('');
+        if (els.searchInstantDropdown) els.searchInstantDropdown.hidden = true;
+        els.searchInput.blur();
+      } else if (e.key === 'ArrowDown') {
+        const first = els.searchDropdownList ? els.searchDropdownList.querySelector('.search-dropdown-item') : null;
+        if (first) {
+          e.preventDefault();
+          first.focus();
+        }
+      } else if (e.key === 'Enter') {
+        if (els.searchInstantDropdown) els.searchInstantDropdown.hidden = true;
+        if (els.searchSection && !els.searchSection.hidden) {
+          els.searchSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    });
+
+    if (els.searchClearInlineBtn) {
+      els.searchClearInlineBtn.addEventListener('click', () => {
+        els.searchInput.value = '';
+        handleSearchInput('');
+        if (els.searchInstantDropdown) els.searchInstantDropdown.hidden = true;
+        els.searchInput.focus();
+      });
+    }
+
+    if (els.clearSearchBtn) {
+      els.clearSearchBtn.addEventListener('click', () => {
+        els.searchInput.value = '';
+        handleSearchInput('');
+        if (els.searchInstantDropdown) els.searchInstantDropdown.hidden = true;
+      });
+    }
+
+    if (els.searchDropdownCloseBtn) {
+      els.searchDropdownCloseBtn.addEventListener('click', () => {
+        if (els.searchInstantDropdown) els.searchInstantDropdown.hidden = true;
+      });
+    }
+
+    if (els.searchDropdownViewAllBtn) {
+      els.searchDropdownViewAllBtn.addEventListener('click', () => {
+        if (els.searchInstantDropdown) els.searchInstantDropdown.hidden = true;
+        if (els.searchSection && !els.searchSection.hidden) {
+          els.searchSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
+
+    // Dismiss search dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (els.searchInstantDropdown && !els.searchInstantDropdown.hidden) {
+        const searchWrap = e.target.closest('.search-wrap');
+        if (!searchWrap) {
+          els.searchInstantDropdown.hidden = true;
+        }
+      }
+    });
+
+    // Sidebar Collapsible & Density toggles
+    if (els.sidebarToggleBtn) {
+      els.sidebarToggleBtn.addEventListener('click', () => {
+        state.sidebarCollapsed = !state.sidebarCollapsed;
+        localStorage.setItem('dayflow_sidebar_collapsed', String(state.sidebarCollapsed));
+        applySidebarCollapsed(state.sidebarCollapsed);
+      });
+    }
+
+    if (els.densityToggleBtn) {
+      els.densityToggleBtn.addEventListener('click', () => {
+        state.compactView = !state.compactView;
+        localStorage.setItem('dayflow_compact_view', String(state.compactView));
+        applyCompactView(state.compactView);
+      });
+    }
+
     els.themeToggleBtn.addEventListener('click', () => {
       const current = document.documentElement.getAttribute('data-theme');
       applyTheme(current === 'dark' ? 'light' : 'dark');
@@ -2270,6 +2580,8 @@
 
   initTheme();
   applyAuthSession();
+  applyCompactView(state.compactView);
+  applySidebarCollapsed(state.sidebarCollapsed);
   wireEvents();
   render();
 })();

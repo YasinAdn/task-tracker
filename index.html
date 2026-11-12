@@ -56,7 +56,24 @@
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <input type="search" id="searchInput" class="search-input" placeholder="Search store, ticket #, ATA, notes (/)..." aria-label="Search tasks" />
+          <input type="search" id="searchInput" class="search-input" placeholder="Search store, ticket #, ATA, notes (/)..." aria-label="Search tasks" autocomplete="off" />
+          <button type="button" class="search-clear-inline" id="searchClearInlineBtn" title="Clear search" aria-label="Clear search" hidden>✕</button>
+
+          <!-- Instant Global Search Dropdown (Zero-Scroll Popover) -->
+          <div id="searchInstantDropdown" class="search-instant-dropdown" hidden>
+            <div class="search-dropdown-header">
+              <div class="search-dropdown-header-left">
+                <span class="search-dropdown-icon">🔍</span>
+                <span class="search-dropdown-title">All-Time Search (<span id="searchDropdownCount">0</span>)</span>
+              </div>
+              <button type="button" class="search-dropdown-close" id="searchDropdownCloseBtn" title="Close (Esc)">✕</button>
+            </div>
+            <div class="search-dropdown-list" id="searchDropdownList"></div>
+            <div class="search-dropdown-footer">
+              <span class="search-dropdown-hint">↑↓ navigate • ↵ open • Esc close</span>
+              <button type="button" class="search-dropdown-view-all" id="searchDropdownViewAllBtn">View all in page ↓</button>
+            </div>
+          </div>
         </div>
         <button type="button" class="btn btn-primary" id="openAddModalBtn">
           <span aria-hidden="true">+</span> Add Task
@@ -156,12 +173,18 @@
     <main class="workspace">
       <aside class="sidebar">
         <!-- Quick Add Form -->
-        <section class="card" aria-labelledby="quickAddHeading">
+        <section class="card quick-add-card" id="quickAddCard" aria-labelledby="quickAddHeading">
           <div class="card-header">
-            <h2 id="quickAddHeading" class="card-title">Quick Add Task</h2>
-            <span class="kbd-hint" title="Press N anywhere to open full task dialog">N</span>
+            <div class="card-title-group">
+              <h2 id="quickAddHeading" class="card-title">Quick Add Task</h2>
+              <span class="kbd-hint" title="Press N anywhere to open full task dialog">N</span>
+            </div>
+            <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Collapse / Expand panel" aria-expanded="true">
+              <span class="toggle-icon" id="sidebarToggleIcon">−</span>
+            </button>
           </div>
-          <div class="template-section">
+          <div id="quickAddBody" class="quick-add-collapsible-body">
+            <div class="template-section">
             <span class="template-label">1-Click Operational Templates:</span>
             <div class="template-pills" data-target="quick" role="group" aria-label="Operational task templates">
               <button type="button" class="template-btn" data-template="poc" title="Follow up with store POC">+ POC (+2h)</button>
@@ -249,6 +272,7 @@
 
             <button type="submit" class="btn btn-primary btn-full">Add Task</button>
           </form>
+          </div>
         </section>
 
         <!-- Daily Progress -->
@@ -331,9 +355,15 @@
 
       <section class="schedule-panel" aria-label="Daily schedule">
         <div class="panel-toolbar">
-          <div class="view-tabs" role="tablist" aria-label="Schedule view">
-            <button type="button" class="view-tab active" id="viewListBtn" role="tab" aria-selected="true">List View</button>
-            <button type="button" class="view-tab" id="viewTimelineBtn" role="tab" aria-selected="false">Timeline</button>
+          <div class="toolbar-left">
+            <div class="view-tabs" role="tablist" aria-label="Schedule view">
+              <button type="button" class="view-tab active" id="viewListBtn" role="tab" aria-selected="true">List View</button>
+              <button type="button" class="view-tab" id="viewTimelineBtn" role="tab" aria-selected="false">Timeline</button>
+            </div>
+            <button type="button" class="density-toggle-btn" id="densityToggleBtn" title="Toggle compact density (minimum scrolling)" aria-pressed="false">
+              <span id="densityToggleIcon">≡</span>
+              <span id="densityToggleLabel">Compact</span>
+            </button>
           </div>
 
           <div class="toolbar-right">
@@ -361,6 +391,20 @@
               <button type="button" class="btn btn-primary" id="emptyAddBtn">+ Add Task</button>
               <button type="button" class="btn btn-subtle" id="emptySampleBtn">Load Store Daily Tasks</button>
             </div>
+          </div>
+
+          <!-- Global Search Results (Active when searching across all dates) -->
+          <div id="searchSection" class="task-section search-results-section" hidden>
+            <div class="section-heading search-heading">
+              <div class="search-heading-left">
+                <span class="search-badge-icon" aria-hidden="true">🔍</span>
+                <h3 id="searchHeadingTitle">Global Search Results</h3>
+                <span class="section-count search-count" id="searchCount">0</span>
+              </div>
+              <button type="button" class="btn btn-subtle btn-sm" id="clearSearchBtn" title="Clear search and return to daily schedule">Clear Search ✕</button>
+            </div>
+            <p class="search-sub-info" id="searchSubInfo">Searching across all dates and scopes</p>
+            <div id="searchList" class="task-list"></div>
           </div>
 
           <!-- Rolled Over / Incomplete from Previous Days -->
