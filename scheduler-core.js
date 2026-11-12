@@ -403,6 +403,8 @@
 
     const notes = String(src.notes || '').trim().slice(0, 1000);
     const completed = Boolean(src.completed);
+    const remindAt = src.remindAt ? String(src.remindAt).trim() : '';
+    const notifiedAt = src.notifiedAt ? String(src.notifiedAt).trim() : '';
 
     if (errors.length > 0) {
       return { valid: false, errors, normalized: null };
@@ -420,7 +422,9 @@
         priority,
         scope,
         notes,
-        completed
+        completed,
+        remindAt,
+        notifiedAt
       }
     };
   }
@@ -746,7 +750,7 @@
   }
 
   /**
-   * Reschedules or extends a task by deltaHours (e.g. +2 hours for POC follow-ups).
+   * Reschedules or extends a task by deltaHours (supports fractions like 0.25 = 15m).
    * @param {Array} tasks
    * @param {string} id
    * @param {number} [hours=2]
@@ -758,20 +762,60 @@
     const task = list.find((t) => t.id === id);
     if (!task) return { ok: false, tasks: list };
 
-    const deltaMinutes = Math.round((Number(hours) || 2) * 60);
+    const deltaMinutes = Math.max(1, Math.round((Number(hours) || 2) * 60));
     const existingStart = timeToMinutes(task.startTime);
+    const existingEnd = timeToMinutes(task.endTime);
+    const duration = existingStart !== null && existingEnd !== null && existingEnd > existingStart
+      ? existingEnd - existingStart
+      : (deltaMinutes <= 30 ? deltaMinutes : DEFAULT_DURATION_MINUTES);
+
     const now = referenceDate instanceof Date ? referenceDate : new Date();
     const currentMins = now.getHours() * 60 + now.getMinutes();
 
     let baseMins = existingStart !== null ? existingStart : currentMins;
     let newStartMins = Math.min(MAX_DAY_MINUTES - 15, baseMins + deltaMinutes);
-    let newEndMins = Math.min(MAX_DAY_MINUTES, newStartMins + DEFAULT_DURATION_MINUTES);
+    let newEndMins = Math.min(MAX_DAY_MINUTES, newStartMins + duration);
+
+    // Set ISO timestamp for when this follow-up alert should fire
+    const followupTarget = new Date(now.getTime() + deltaMinutes * 60000);
+    const remindAt = followupTarget.toISOString();
 
     return updateTask(list, id, {
       startTime: minutesToTime(newStartMins),
       endTime: minutesToTime(newEndMins),
+      remindAt,
+      notifiedAt: '',
       completed: false
     });
+  }
+
+  /**
+   * Determines the follow-up or reminder timestamp (in ms) for a task.
+   * Checks explicit `remindAt` first, then task `date + endTime`.
+   * @param {Object} task
+   * @returns {number|null} Timestamp in ms, or null if no reminder time is available
+   */
+  function getTaskFollowupTime(task) {
+    if (!task || task.completed) return null;
+    if (task.remindAt) {
+      const ms = Date.parse(task.remindAt);
+      if (!Number.isNaN(ms)) return ms;
+    }
+    if (task.date && task.endTime) {
+      const parts = task.date.split('-');
+      const timeParts = task.endTime.split(':');
+      if (parts.length === 3 && timeParts.length >= 2) {
+        const year = Number(parts[0]);
+        const month = Number(parts[1]);
+        const day = Number(parts[2]);
+        const hours = Number(timeParts[0]);
+        const minutes = Number(timeParts[1]);
+        if (!Number.isNaN(year) && !Number.isNaN(hours)) {
+          return new Date(year, month - 1, day, hours, minutes, 0, 0).getTime();
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -1172,6 +1216,7 @@
     addTask,
     updateTask,
     snoozeTask,
+    getTaskFollowupTime,
     moveTaskToDate,
     moveAllOverdueToDate,
     removeTask,

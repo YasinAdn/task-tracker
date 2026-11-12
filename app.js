@@ -45,6 +45,20 @@
     themeIconSun: document.getElementById('themeIconSun'),
     themeIconMoon: document.getElementById('themeIconMoon'),
 
+    // Notifications & Audio alerts
+    notificationToggleBtn: document.getElementById('notificationToggleBtn'),
+    notificationToggleLabel: document.getElementById('notificationToggleLabel'),
+    notificationStatusDot: document.getElementById('notificationStatusDot'),
+    followupAlertBanner: document.getElementById('followupAlertBanner'),
+    followupAlertTitle: document.getElementById('followupAlertTitle'),
+    followupAlertScope: document.getElementById('followupAlertScope'),
+    followupAlertTime: document.getElementById('followupAlertTime'),
+    followupAlertDetails: document.getElementById('followupAlertDetails'),
+    followupCompleteBtn: document.getElementById('followupCompleteBtn'),
+    followupSnooze15Btn: document.getElementById('followupSnooze15Btn'),
+    followupSnooze1hBtn: document.getElementById('followupSnooze1hBtn'),
+    followupDismissBtn: document.getElementById('followupDismissBtn'),
+
     // Scope switcher in header & count badges
     scopeWorkBtn: document.getElementById('scopeWorkBtn'),
     scopePersonalBtn: document.getElementById('scopePersonalBtn'),
@@ -127,11 +141,13 @@
     modalEndInput: document.getElementById('modalEndInput'),
     modalCategoryInput: document.getElementById('modalCategoryInput'),
     modalPriorityInput: document.getElementById('modalPriorityInput'),
+    modalFollowupSelect: document.getElementById('modalFollowupSelect'),
     modalNotesInput: document.getElementById('modalNotesInput'),
     modalCompletedWrap: document.getElementById('modalCompletedWrap'),
     modalCompletedInput: document.getElementById('modalCompletedInput'),
     modalError: document.getElementById('modalError'),
     modalDeleteBtn: document.getElementById('modalDeleteBtn'),
+    modalSnooze15Btn: document.getElementById('modalSnooze15Btn'),
     modalSnoozeBtn: document.getElementById('modalSnoozeBtn'),
     modalCancelBtn: document.getElementById('modalCancelBtn'),
     modalSubmitBtn: document.getElementById('modalSubmitBtn'),
@@ -528,6 +544,167 @@
     timerId = setTimeout(dismiss, undoCallback ? 6000 : 3200);
   }
 
+  /* -------------------- Follow-Up Notification Service -------------------- */
+
+  let activeAlertTaskId = null;
+
+  function playNotificationChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const now = ctx.currentTime;
+
+      // Note 1: High crisp chime (E6 ~ 1318.5 Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(1318.51, now);
+      gain1.gain.setValueAtTime(0, now);
+      gain1.gain.linearRampToValueAtTime(0.35, now + 0.02);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.45);
+
+      // Note 2: Warm resolving tone (A6 ~ 1760 Hz) after 140ms
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1760.00, now + 0.14);
+      gain2.gain.setValueAtTime(0, now + 0.14);
+      gain2.gain.linearRampToValueAtTime(0.38, now + 0.16);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.14);
+      osc2.stop(now + 0.85);
+    } catch {
+      // Audio playback unavailable or blocked by browser policy
+    }
+  }
+
+  function getNotificationPermission() {
+    if (!('Notification' in window)) return 'unsupported';
+    return Notification.permission;
+  }
+
+  async function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      showToast('Browser notifications are not supported in this browser.');
+      return 'unsupported';
+    }
+    try {
+      const result = await Notification.requestPermission();
+      updateNotificationStatusUI();
+      if (result === 'granted') {
+        playNotificationChime();
+        showToast('Follow-up notifications enabled! Audio chime active.');
+        try {
+          new Notification('Dayflow Follow-up Alerts Active', {
+            body: 'You will receive desktop notifications when 15-minute follow-ups are due.',
+            icon: '/favicon.ico'
+          });
+        } catch {}
+      } else if (result === 'denied') {
+        showToast('Notifications blocked. You will still receive in-app alerts and audio chimes.');
+      }
+      return result;
+    } catch {
+      return 'denied';
+    }
+  }
+
+  function updateNotificationStatusUI() {
+    if (!els.notificationStatusDot || !els.notificationToggleLabel) return;
+    const perm = getNotificationPermission();
+    if (perm === 'granted') {
+      els.notificationStatusDot.className = 'notification-status-dot active';
+      els.notificationStatusDot.title = 'Alerts enabled (OS notifications & audio active)';
+      els.notificationToggleLabel.textContent = 'Alerts On';
+    } else if (perm === 'denied') {
+      els.notificationStatusDot.className = 'notification-status-dot blocked';
+      els.notificationStatusDot.title = 'OS notifications blocked in browser settings. In-app alerts remain active.';
+      els.notificationToggleLabel.textContent = 'Alerts (In-App)';
+    } else {
+      els.notificationStatusDot.className = 'notification-status-dot';
+      els.notificationStatusDot.title = 'Click to enable desktop notifications for 15m follow-ups';
+      els.notificationToggleLabel.textContent = 'Enable Alerts';
+    }
+  }
+
+  function triggerFollowupAlert(task) {
+    if (!task) return;
+    activeAlertTaskId = task.id;
+
+    // Play chime sound
+    playNotificationChime();
+
+    // Show native desktop notification
+    if (getNotificationPermission() === 'granted') {
+      try {
+        const notif = new Notification(`⏰ Follow-up Due: ${task.title}`, {
+          body: task.notes ? task.notes.replace(/\n/g, ' • ') : 'Your scheduled follow-up time has been reached.',
+          icon: '/favicon.ico',
+          tag: `task-${task.id}`
+        });
+        notif.onclick = () => {
+          window.focus();
+          openEditModal(task.id);
+        };
+      } catch {}
+    }
+
+    // Display In-App Floating Alert Banner
+    if (els.followupAlertBanner) {
+      els.followupAlertTitle.textContent = task.title;
+      els.followupAlertScope.textContent = task.scope === 'personal' ? '👤 Personal' : '💼 Work';
+      const detailText = task.notes ? task.notes.split('\n')[0] : 'Follow-up time reached.';
+      els.followupAlertDetails.textContent = detailText;
+      els.followupAlertTime.textContent = task.endTime ? Core.formatTime12h(task.endTime) : 'Now';
+      els.followupAlertBanner.hidden = false;
+    }
+
+    // Mark task as notified to avoid repeating every tick
+    const nowIso = new Date().toISOString();
+    handleEditTask(task.id, { notifiedAt: nowIso }, { hidden: true });
+  }
+
+  function dismissFollowupAlert() {
+    if (els.followupAlertBanner) {
+      els.followupAlertBanner.hidden = true;
+    }
+    activeAlertTaskId = null;
+  }
+
+  function checkFollowupDueReminders() {
+    const nowMs = Date.now();
+
+    for (const task of state.tasks) {
+      if (task.completed) continue;
+      // Skip if task already notified within the last 15 minutes
+      if (task.notifiedAt) {
+        const lastNotifiedMs = Date.parse(task.notifiedAt);
+        if (!Number.isNaN(lastNotifiedMs) && nowMs - lastNotifiedMs < 15 * 60 * 1000) {
+          continue;
+        }
+      }
+
+      const dueMs = Core.getTaskFollowupTime(task);
+      if (dueMs !== null && nowMs >= dueMs) {
+        // Alert if due within the last 2 hours
+        if (nowMs - dueMs < 2 * 60 * 60 * 1000) {
+          triggerFollowupAlert(task);
+          break;
+        }
+      }
+    }
+  }
+
   /* -------------------- Task Mutations -------------------- */
 
   function handleAddTask(input, errorEl) {
@@ -591,13 +768,16 @@
   }
 
   function handleSnoozeTask(id, hours) {
-    const res = Core.snoozeTask(state.tasks, id, hours || 2);
+    const hrs = typeof hours === 'number' ? hours : 2;
+    const res = Core.snoozeTask(state.tasks, id, hrs);
     if (!res.ok) return;
     state.tasks = res.tasks;
     saveTasks();
     render();
     pushTaskToServer(res.task);
-    showToast(`Follow-up scheduled for ${Core.formatTime12h(res.task.startTime)} (+${hours || 2}h)`);
+    const mins = Math.round(hrs * 60);
+    const label = mins < 60 ? `+${mins}m` : `+${hrs}h`;
+    showToast(`Follow-up scheduled for ${Core.formatTime12h(res.task.startTime)} (${label})`);
   }
 
   function handleMoveTaskToDate(id, targetDate) {
@@ -912,7 +1092,9 @@
     els.modalCompletedInput.checked = false;
     els.modalCompletedWrap.hidden = true;
     els.modalDeleteBtn.hidden = true;
+    if (els.modalSnooze15Btn) els.modalSnooze15Btn.hidden = true;
     els.modalSnoozeBtn.hidden = true;
+    if (els.modalFollowupSelect) els.modalFollowupSelect.value = 'auto';
     els.modalError.hidden = true;
 
     els.taskModal.hidden = false;
@@ -936,9 +1118,13 @@
     els.modalCategoryInput.value = task.category;
     els.modalPriorityInput.value = task.priority;
     els.modalNotesInput.value = task.notes || '';
+    if (els.modalFollowupSelect) {
+      els.modalFollowupSelect.value = task.remindAt ? '15' : 'auto';
+    }
     els.modalCompletedInput.checked = Boolean(task.completed);
     els.modalCompletedWrap.hidden = false;
     els.modalDeleteBtn.hidden = false;
+    if (els.modalSnooze15Btn) els.modalSnooze15Btn.hidden = false;
     els.modalSnoozeBtn.hidden = false;
     els.modalError.hidden = true;
 
@@ -1051,6 +1237,17 @@
     catBadge.appendChild(catText);
     meta.appendChild(catBadge);
 
+    if (task.remindAt && !task.completed) {
+      const remindMs = Date.parse(task.remindAt);
+      if (!Number.isNaN(remindMs)) {
+        const diffMins = Math.round((remindMs - Date.now()) / 60000);
+        const alertTag = document.createElement('span');
+        alertTag.className = 'followup-indicator-tag';
+        alertTag.textContent = diffMins > 0 ? `⏰ In ${diffMins}m` : '⏰ Due Now';
+        meta.appendChild(alertTag);
+      }
+    }
+
     body.appendChild(meta);
 
     if (task.notes) {
@@ -1095,6 +1292,16 @@
       });
       actions.appendChild(moveTodayBtn);
     }
+
+    const snooze15Btn = document.createElement('button');
+    snooze15Btn.type = 'button';
+    snooze15Btn.className = 'snooze-15m-btn';
+    snooze15Btn.title = 'Reschedule / Follow up in 15 minutes (+15m reminder)';
+    snooze15Btn.textContent = '+15m';
+    snooze15Btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleSnoozeTask(task.id, 0.25);
+    });
 
     const snoozeBtn = document.createElement('button');
     snoozeBtn.type = 'button';
@@ -1302,6 +1509,16 @@
 
       const actions = document.createElement('div');
       actions.className = 'timeline-block-actions';
+
+      const snooze15Btn = document.createElement('button');
+      snooze15Btn.type = 'button';
+      snooze15Btn.className = 'mini-btn';
+      snooze15Btn.title = 'Reschedule +15m';
+      snooze15Btn.textContent = '+15m';
+      snooze15Btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleSnoozeTask(task.id, 0.25);
+      });
 
       const snoozeBtn = document.createElement('button');
       snoozeBtn.type = 'button';
@@ -1718,6 +1935,24 @@
       e.preventDefault();
       const id = els.modalTaskId.value;
       const scopeVal = (els.modalScopeInput ? els.modalScopeInput.value : state.activeScope) || 'work';
+
+      const followupChoice = els.modalFollowupSelect ? els.modalFollowupSelect.value : 'auto';
+      let remindAt = '';
+      if (followupChoice === '15') {
+        remindAt = new Date(Date.now() + 15 * 60000).toISOString();
+      } else if (followupChoice === '30') {
+        remindAt = new Date(Date.now() + 30 * 60000).toISOString();
+      } else if (followupChoice === '60') {
+        remindAt = new Date(Date.now() + 60 * 60000).toISOString();
+      } else if (followupChoice === '120') {
+        remindAt = new Date(Date.now() + 120 * 60000).toISOString();
+      } else if (followupChoice === 'none') {
+        remindAt = '';
+      } else if (id) {
+        const existing = state.tasks.find((t) => t.id === id);
+        if (existing && existing.remindAt) remindAt = existing.remindAt;
+      }
+
       const payload = {
         title: els.modalTitleInput.value,
         date: els.modalDateInput.value,
@@ -1727,7 +1962,9 @@
         priority: els.modalPriorityInput.value,
         notes: els.modalNotesInput.value,
         completed: els.modalCompletedInput.checked,
-        scope: scopeVal
+        scope: scopeVal,
+        remindAt,
+        notifiedAt: ''
       };
 
       const ok = id
@@ -1744,12 +1981,67 @@
       handleDeleteTask(id);
     });
 
+    if (els.modalSnooze15Btn) {
+      els.modalSnooze15Btn.addEventListener('click', () => {
+        const id = els.modalTaskId.value;
+        if (!id) return;
+        closeModal();
+        handleSnoozeTask(id, 0.25);
+      });
+    }
+
     els.modalSnoozeBtn.addEventListener('click', () => {
       const id = els.modalTaskId.value;
       if (!id) return;
       closeModal();
       handleSnoozeTask(id, 2);
     });
+
+    // Follow-up Notification Toggle & Chime Test
+    if (els.notificationToggleBtn) {
+      els.notificationToggleBtn.addEventListener('click', async () => {
+        const perm = getNotificationPermission();
+        if (perm === 'granted') {
+          playNotificationChime();
+          showToast('Alert test: Notifications and audio chime are operational!');
+        } else {
+          await requestNotificationPermission();
+        }
+      });
+    }
+
+    // Follow-up Alert Banner Action Buttons
+    if (els.followupCompleteBtn) {
+      els.followupCompleteBtn.addEventListener('click', () => {
+        if (activeAlertTaskId) {
+          handleToggleTask(activeAlertTaskId);
+          showToast('Follow-up task marked completed');
+        }
+        dismissFollowupAlert();
+      });
+    }
+
+    if (els.followupSnooze15Btn) {
+      els.followupSnooze15Btn.addEventListener('click', () => {
+        if (activeAlertTaskId) {
+          handleSnoozeTask(activeAlertTaskId, 0.25);
+        }
+        dismissFollowupAlert();
+      });
+    }
+
+    if (els.followupSnooze1hBtn) {
+      els.followupSnooze1hBtn.addEventListener('click', () => {
+        if (activeAlertTaskId) {
+          handleSnoozeTask(activeAlertTaskId, 1);
+        }
+        dismissFollowupAlert();
+      });
+    }
+
+    if (els.followupDismissBtn) {
+      els.followupDismissBtn.addEventListener('click', dismissFollowupAlert);
+    }
 
     // Template Prompt Modal handling
     els.closeTemplateModalBtn.addEventListener('click', closeTemplateModal);
@@ -1930,6 +2222,9 @@
         } catch {}
       }
     });
+    // Follow-up reminder poller (checks every 4 seconds)
+    setInterval(checkFollowupDueReminders, 4000);
+    updateNotificationStatusUI();
   }
 
   initTheme();

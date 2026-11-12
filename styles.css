@@ -1836,3 +1836,178 @@ body.role-viewer #logoutBtn {
   cursor: pointer !important;
   z-index: 999 !important;
 }
+
+/* ==========================================================================
+   Follow-Up Notification Service & Alerts
+   ========================================================================== */
+
+/* Notification Toggle & Status Dot in Header */
+.alert-toggle-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.notification-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #eab308;
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+.notification-status-dot.active {
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
+}
+
+.notification-status-dot.blocked {
+  background: #ef4444;
+}
+
+/* Follow-up Alert Banner */
+.followup-alert-banner {
+  position: sticky;
+  top: 61px;
+  z-index: 90;
+  width: 100%;
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 2px solid #f97316;
+  box-shadow: 0 6px 24px rgba(249, 115, 22, 0.25);
+  animation: slideDownAlert 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDownAlert {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.followup-alert-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.followup-alert-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.bell-pulse {
+  display: inline-block;
+  animation: bellJiggle 1.4s ease infinite;
+}
+
+@keyframes bellJiggle {
+  0%, 100% { transform: rotate(0); }
+  10%, 30% { transform: rotate(14deg); }
+  20%, 40% { transform: rotate(-14deg); }
+  50% { transform: rotate(0); }
+}
+
+.followup-alert-content {
+  flex: 1;
+  min-width: 240px;
+}
+
+.followup-alert-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+  flex-wrap: wrap;
+}
+
+.followup-alert-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+.followup-scope-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.followup-time-badge {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.followup-alert-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+.followup-alert-sub {
+  margin: 2px 0 0 0;
+  font-size: 0.82rem;
+  color: #a1a1aa;
+}
+
+.followup-alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 15-Minute Follow-up Buttons on Cards */
+.snooze-15m-btn {
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 4px;
+  background: rgba(249, 115, 22, 0.12);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.snooze-15m-btn:hover {
+  background: rgba(249, 115, 22, 0.25);
+  border-color: #fb923c;
+  color: #ffffff;
+}
+
+.followup-indicator-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.35);
+}

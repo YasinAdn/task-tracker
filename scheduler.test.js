@@ -477,3 +477,39 @@ test('Work and Personal scope isolation in filterAndSortTasks, computeDailyStats
   assert.equal(task5.date, '2026-11-12'); // Moved to today
   assert.equal(task6.date, '2026-11-11'); // Personal overdue kept untouched
 });
+
+test('Follow-up notification: 15-minute snooze and getTaskFollowupTime calculation', () => {
+  const initialTask = {
+    id: 'morrilton_1',
+    title: 'Contacted POC at Morrilton, no response — will check back in 15 mins',
+    date: '2026-11-12',
+    startTime: '21:00',
+    endTime: '21:15',
+    scope: 'work',
+    completed: false
+  };
+
+  // Check follow-up time based on date and endTime
+  const dueMs = Core.getTaskFollowupTime(initialTask);
+  assert.ok(dueMs !== null);
+  const dueDate = new Date(dueMs);
+  assert.equal(dueDate.getFullYear(), 2026);
+  assert.equal(dueDate.getMonth(), 10); // 0-indexed November
+  assert.equal(dueDate.getDate(), 12);
+  assert.equal(dueDate.getHours(), 21);
+  assert.equal(dueDate.getMinutes(), 15);
+
+  // Snooze by 15 minutes (0.25 hours) at 21:00
+  const refTime = new Date(2026, 10, 12, 21, 0, 0);
+  const snoozeRes = Core.snoozeTask([initialTask], 'morrilton_1', 0.25, refTime);
+  assert.equal(snoozeRes.ok, true);
+  const snoozed = snoozeRes.task;
+  assert.equal(snoozed.startTime, '21:15');
+  assert.equal(snoozed.endTime, '21:30');
+  assert.ok(snoozed.remindAt);
+  assert.equal(snoozed.notifiedAt, '');
+
+  // getTaskFollowupTime gives the explicit remindAt timestamp
+  const snoozedDueMs = Core.getTaskFollowupTime(snoozed);
+  assert.equal(snoozedDueMs, Date.parse(snoozed.remindAt));
+});
