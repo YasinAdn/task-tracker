@@ -3,51 +3,55 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Dayflow — Streamlined daily task scheduler for store operations, follow-up alerts, and personal planning." />
   <title>Dayflow — Daily Task Scheduler</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2369be28' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='3' fill='%23121519'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3Cpath d='M9 16l2 2 4-4'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand">
-        <div class="brand-icon" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="3"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-            <path d="M9 16l2 2 4-4"></path>
-          </svg>
+      <div class="topbar-primary">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="3"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+              <path d="M9 16l2 2 4-4"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="brand-title">Dayflow</h1>
+            <p class="brand-subtitle" id="displayDateLabel">Daily Task Scheduler</p>
+          </div>
         </div>
-        <div>
-          <h1 class="brand-title">Dayflow</h1>
-          <p class="brand-subtitle" id="displayDateLabel">Daily Task Scheduler</p>
+
+        <div class="date-nav" role="group" aria-label="Date navigation">
+          <button type="button" class="icon-btn" id="prevDayBtn" title="Previous day" aria-label="Previous day">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button type="button" class="btn btn-subtle btn-sm" id="todayBtn">Today</button>
+          <input type="date" id="datePicker" class="date-input" aria-label="Choose date" />
+          <button type="button" class="icon-btn" id="nextDayBtn" title="Next day" aria-label="Next day">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
         </div>
-      </div>
 
-      <div class="date-nav" role="group" aria-label="Date navigation">
-        <button type="button" class="icon-btn" id="prevDayBtn" title="Previous day" aria-label="Previous day">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-        </button>
-        <button type="button" class="btn btn-subtle btn-sm" id="todayBtn">Today</button>
-        <input type="date" id="datePicker" class="date-input" aria-label="Choose date" />
-        <button type="button" class="icon-btn" id="nextDayBtn" title="Next day" aria-label="Next day">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </button>
-      </div>
-
-      <!-- Scope Switcher: Work vs Personal -->
-      <div class="scope-switcher" role="group" aria-label="Task Section Switcher">
-        <button type="button" class="scope-btn active" id="scopeWorkBtn" data-scope="work" title="Switch to Work Tasks">
-          <span class="scope-btn-icon">💼</span>
-          <span class="scope-btn-text">Work</span>
-          <span class="scope-badge" id="workCountBadge">0</span>
-        </button>
-        <button type="button" class="scope-btn" id="scopePersonalBtn" data-scope="personal" title="Switch to Personal Tasks">
-          <span class="scope-btn-icon">👤</span>
-          <span class="scope-btn-text">Personal</span>
-          <span class="scope-badge" id="personalCountBadge">0</span>
-        </button>
+        <!-- Scope Switcher: Work vs Personal -->
+        <div class="scope-switcher" role="group" aria-label="Task Section Switcher">
+          <button type="button" class="scope-btn active" id="scopeWorkBtn" data-scope="work" title="Switch to Work Tasks">
+            <span class="scope-btn-icon" aria-hidden="true">💼</span>
+            <span class="scope-btn-text">Work</span>
+            <span class="scope-badge" id="workCountBadge">0</span>
+          </button>
+          <button type="button" class="scope-btn" id="scopePersonalBtn" data-scope="personal" title="Switch to Personal Tasks">
+            <span class="scope-btn-icon" aria-hidden="true">👤</span>
+            <span class="scope-btn-text">Personal</span>
+            <span class="scope-badge" id="personalCountBadge">0</span>
+          </button>
+        </div>
       </div>
 
       <div class="topbar-actions">
@@ -56,7 +60,7 @@
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <input type="search" id="searchInput" class="search-input" placeholder="Search store, ticket #, ATA, notes (/)..." aria-label="Search tasks" autocomplete="off" />
+          <input type="search" id="searchInput" class="search-input" placeholder="Search all tasks, tickets, notes (/)..." aria-label="Search tasks" autocomplete="off" />
           <button type="button" class="search-clear-inline" id="searchClearInlineBtn" title="Clear search" aria-label="Clear search" hidden>✕</button>
 
           <!-- Instant Global Search Dropdown (Zero-Scroll Popover) -->
@@ -77,22 +81,6 @@
         </div>
         <button type="button" class="btn btn-primary" id="openAddModalBtn">
           <span aria-hidden="true">+</span> Add Task
-        </button>
-        <button type="button" class="btn btn-subtle" id="topbarExportBtn" title="Export tasks to Excel (.xlsx)">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Export .xlsx
-        </button>
-        <button type="button" class="btn btn-subtle" id="topbarImportXlsxBtn" title="Import tasks from an Excel (.xlsx) spreadsheet">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" y1="3" x2="12" y2="15"></line>
-          </svg>
-          Import .xlsx
         </button>
         <button type="button" class="btn btn-subtle alert-toggle-btn" id="notificationToggleBtn" title="Follow-up notifications & audio chime">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -163,9 +151,9 @@
 
     <div id="viewerBanner" class="viewer-banner" hidden role="alert">
       <div class="viewer-banner-content">
-        <span class="viewer-banner-icon">🔒</span>
+        <span class="viewer-banner-icon" aria-hidden="true">👁️</span>
         <div>
-          <strong>Viewer Mode (Read-Only)</strong>: All editing, task actions, form inputs, and inspect elements are disabled. Only the Log Out button is active.
+          <strong>Viewer Mode (Read-Only)</strong> — You can browse dates, search tasks, switch Work/Personal views, and toggle Light/Dark theme. Editing, adding, importing, and exporting are restricted to Admin accounts.
         </div>
       </div>
     </div>
@@ -296,7 +284,7 @@
           </div>
         </section>
 
-        <!-- Filters & Backup -->
+        <!-- Filters -->
         <section class="card" aria-labelledby="filtersHeading">
           <div class="card-header">
             <h2 id="filtersHeading" class="card-title">Filters</h2>
@@ -340,12 +328,18 @@
               </select>
             </div>
           </div>
+        </section>
 
+        <!-- Data & Excel Tools (Admin Only) -->
+        <section class="card" id="dataToolsCard" aria-labelledby="dataToolsHeading">
+          <div class="card-header">
+            <h2 id="dataToolsHeading" class="card-title">Data &amp; Excel</h2>
+            <button type="button" class="link-btn" id="loadSampleBtn" title="Load operational store tasks for this day">+ Sample Day</button>
+          </div>
           <div class="utility-actions">
-            <button type="button" class="btn btn-subtle btn-sm" id="loadSampleBtn" title="Load your 10 operational daily tasks">Store Tasks</button>
-            <button type="button" class="btn btn-subtle btn-sm" id="exportBtn" title="Export tasks to an Excel (.xlsx) spreadsheet">Export .xlsx</button>
-            <button type="button" class="btn btn-subtle btn-sm" id="importXlsxBtn" title="Import tasks from an Excel (.xlsx) spreadsheet">Import .xlsx</button>
-            <button type="button" class="btn btn-subtle btn-sm" id="exportJsonBtn" title="Backup tasks as JSON">Backup JSON</button>
+            <button type="button" class="btn btn-subtle btn-sm" id="exportBtn" title="Export tasks to an Excel (.xlsx) spreadsheet">📊 Export .xlsx</button>
+            <button type="button" class="btn btn-subtle btn-sm" id="importXlsxBtn" title="Import tasks from an Excel (.xlsx) spreadsheet">📥 Import .xlsx</button>
+            <button type="button" class="btn btn-subtle btn-sm" id="exportJsonBtn" title="Download full JSON backup">Backup JSON</button>
             <button type="button" class="btn btn-subtle btn-sm" id="importBtn" title="Restore tasks from JSON file">Restore JSON</button>
             <input type="file" id="importFileInput" accept="application/json,.json" hidden />
             <input type="file" id="importXlsxFileInput" accept=".xlsx,.xls,.csv" hidden />
@@ -368,8 +362,6 @@
 
           <div class="toolbar-right">
             <span class="task-count-pill" id="visibleCountLabel">0 tasks</span>
-            <button type="button" class="btn btn-subtle btn-sm" id="toolbarExportBtn" title="Export tasks to Excel (.xlsx)">📊 Export .xlsx</button>
-            <button type="button" class="btn btn-subtle btn-sm" id="toolbarImportXlsxBtn" title="Import tasks from Excel (.xlsx)">📥 Import .xlsx</button>
             <button type="button" class="btn btn-subtle btn-sm" id="clearCompletedBtn" hidden>Clear Completed</button>
           </div>
         </div>
@@ -714,13 +706,13 @@
         </div>
         <div>
           <h1 class="login-title">Dayflow</h1>
-          <p class="login-sub">Role-Based Access Control</p>
+          <p class="login-sub">Operations &amp; Personal Daily Planner</p>
         </div>
       </div>
 
       <div class="login-welcome">
-        <h2 id="loginTitle">Sign In</h2>
-        <p>Please enter your credentials to access the task tracker.</p>
+        <h2 id="loginTitle">Welcome back</h2>
+        <p>Sign in to plan your schedule, track follow-up reminders, and search all historical tickets.</p>
       </div>
 
       <form id="loginForm" class="modal-form" novalidate>
@@ -759,12 +751,7 @@
   <!-- Toast Container -->
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
-  <script src="vendor/xlsx.full.min.js"></script>
-  <script>
-    if (typeof XLSX === 'undefined') {
-      document.write('<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"><\\/script>');
-    }
-  </script>
+  <!-- Excel (.xlsx) engine loads on demand in app.js when exporting or importing -->
   <script src="scheduler-core.js"></script>
   <script src="app.js"></script>
 </body>

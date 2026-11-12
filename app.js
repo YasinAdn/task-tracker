@@ -301,6 +301,15 @@
 
   /* -------------------- Codebase Storage & Server Sync -------------------- */
 
+  function requirePermission(action, actionLabel) {
+    if (!currentUser) return false;
+    if (Core.canUserPerformAction(currentUser.role, action)) {
+      return true;
+    }
+    showToast(`Viewer Mode: ${actionLabel || 'This action'} requires an Admin account.`);
+    return false;
+  }
+
   let isSyncing = false;
 
   async function syncTasksFromServer() {
@@ -312,10 +321,15 @@
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.tasks)) {
         if (data.tasks.length > 0) {
-          state.tasks = data.tasks;
-          saveTasksLocally();
-          render();
-          return true;
+          const incomingSerialized = JSON.stringify(data.tasks);
+          const currentSerialized = JSON.stringify(state.tasks || []);
+          if (incomingSerialized !== currentSerialized) {
+            state.tasks = data.tasks;
+            saveTasksLocally();
+            render();
+            return true;
+          }
+          return false;
         } else if (state.tasks && state.tasks.length > 0) {
           // If server returns empty list (e.g. fresh lambda), re-seed server from client!
           syncBulkToServer(state.tasks);
@@ -869,6 +883,7 @@
   /* -------------------- Task Mutations -------------------- */
 
   function handleAddTask(input, errorEl) {
+    if (!requirePermission('add', 'Adding tasks')) return false;
     const res = Core.addTask(state.tasks, input);
     if (!res.ok) {
       errorEl.textContent = res.errors.join(' ');
@@ -890,6 +905,7 @@
   }
 
   function handleEditTask(id, patch, errorEl) {
+    if (!requirePermission('edit', 'Editing tasks')) return false;
     const res = Core.updateTask(state.tasks, id, patch);
     if (!res.ok) {
       errorEl.textContent = res.errors.join(' ');
@@ -911,6 +927,7 @@
   }
 
   function handleDeleteTask(id) {
+    if (!requirePermission('delete', 'Deleting tasks')) return;
     const previousTasks = state.tasks.slice();
     const res = Core.removeTask(state.tasks, id);
     if (!res.ok || !res.removed) return;
@@ -929,6 +946,7 @@
   }
 
   function handleSnoozeTask(id, hours) {
+    if (!requirePermission('edit', 'Rescheduling tasks')) return;
     const hrs = typeof hours === 'number' ? hours : 2;
     const res = Core.snoozeTask(state.tasks, id, hrs);
     if (!res.ok) return;
@@ -942,6 +960,7 @@
   }
 
   function handleMoveTaskToDate(id, targetDate) {
+    if (!requirePermission('edit', 'Moving tasks')) return;
     const res = Core.moveTaskToDate(state.tasks, id, targetDate);
     if (!res.ok) return;
     state.tasks = res.tasks;
@@ -952,6 +971,7 @@
   }
 
   function handleMoveAllOverdueToDate() {
+    if (!requirePermission('edit', 'Moving tasks')) return;
     const res = Core.moveAllOverdueToDate(state.tasks, state.selectedDate, state.activeScope);
     if (!res.ok || res.movedCount === 0) return;
     state.tasks = res.tasks;
@@ -963,6 +983,7 @@
   }
 
   function handleToggleTask(id) {
+    if (!requirePermission('edit', 'Completing tasks')) return;
     const res = Core.toggleTaskCompletion(state.tasks, id);
     if (!res.ok) return;
     state.tasks = res.tasks;
@@ -972,6 +993,7 @@
   }
 
   function handleClearCompleted() {
+    if (!requirePermission('delete', 'Clearing completed tasks')) return;
     const previousTasks = state.tasks.slice();
     const res = Core.clearCompletedForDate(state.tasks, state.selectedDate, state.activeScope);
     if (res.removedCount === 0) return;
@@ -1141,7 +1163,50 @@
     }
   }
 
+  let xlsxLoadPromise = null;
+
+  function loadXlsxLibrary() {
+    if (typeof XLSX !== 'undefined') {
+      return Promise.resolve();
+    }
+    if (xlsxLoadPromise) {
+      return xlsxLoadPromise;
+    }
+    xlsxLoadPromise = new Promise((resolve, reject) => {
+      const injectScript = (src, fallbackSrc) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = () => {
+          if (typeof XLSX !== 'undefined') {
+            resolve();
+          } else if (fallbackSrc) {
+            injectScript(fallbackSrc, null);
+          } else {
+            xlsxLoadPromise = null;
+            reject(new Error('XLSX global unavailable after load'));
+          }
+        };
+        s.onerror = () => {
+          if (fallbackSrc) {
+            injectScript(fallbackSrc, null);
+          } else {
+            xlsxLoadPromise = null;
+            reject(new Error('Failed to load Excel engine'));
+          }
+        };
+        document.head.appendChild(s);
+      };
+      injectScript(
+        'vendor/xlsx.full.min.js',
+        'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js'
+      );
+    });
+    return xlsxLoadPromise;
+  }
+
   function openExportModal() {
+    if (!requirePermission('export', 'Exporting tasks')) return;
     const todayKey = Core.formatDateKey(new Date());
     els.exportStartDate.value = state.selectedDate || todayKey;
     els.exportEndDate.value = state.selectedDate || todayKey;
@@ -1159,10 +1224,25 @@
     els.exportError.hidden = true;
   }
 
-  function executeExcelExport() {
-    if (typeof XLSX === 'undefined') {
-      showToast('Excel exporter library is loading, please try again in a moment.');
+  async function executeExcelExport() {
+    if (!requirePermission('export', 'Exporting tasks')) return;
+    if (els.confirmExportBtn) {
+      els.confirmExportBtn.disabled = true;
+      els.confirmExportBtn.textContent = 'Preparing .xlsx...';
+    }
+    try {
+      await loadXlsxLibrary();
+    } catch {
+      showToast('Could not load Excel exporter library. Please check your connection.');
+      if (els.confirmExportBtn) {
+        els.confirmExportBtn.disabled = false;
+        els.confirmExportBtn.textContent = 'Download .xlsx';
+      }
       return;
+    }
+    if (els.confirmExportBtn) {
+      els.confirmExportBtn.disabled = false;
+      els.confirmExportBtn.textContent = 'Download .xlsx';
     }
 
     const matching = Core.filterTasksForExport(state.tasks, {
@@ -1236,6 +1316,7 @@
   /* -------------------- Modal Handling -------------------- */
 
   function openAddModal(defaults) {
+    if (!requirePermission('add', 'Adding tasks')) return;
     const opts = defaults || {};
     const defaultScope = opts.scope || state.activeScope || 'work';
     setFormScope('modal', defaultScope);
@@ -1274,6 +1355,7 @@
   }
 
   function openEditModal(taskId) {
+    if (!requirePermission('edit', 'Editing tasks')) return;
     const task = state.tasks.find((t) => t.id === taskId);
     if (!task) return;
 
@@ -2220,10 +2302,7 @@
 
     // Excel (.xlsx / .xls / .csv) Spreadsheet Import
     function triggerXlsxImport() {
-      if (currentUser && currentUser.role === 'viewer') {
-        showToast('Viewer Mode: Importing tasks is disabled.');
-        return;
-      }
+      if (!requirePermission('add', 'Importing tasks')) return;
       if (els.importXlsxFileInput) {
         els.importXlsxFileInput.click();
       }
@@ -2241,11 +2320,18 @@
 
     if (els.importXlsxFileInput) {
       els.importXlsxFileInput.addEventListener('change', async (e) => {
+        if (!requirePermission('add', 'Importing tasks')) {
+          els.importXlsxFileInput.value = '';
+          return;
+        }
         const file = e.target.files && e.target.files[0];
         if (!file) return;
 
-        if (typeof XLSX === 'undefined') {
-          showToast('Excel library is still loading. Please try again in a moment.');
+        try {
+          await loadXlsxLibrary();
+        } catch {
+          showToast('Could not load Excel reader library. Please check your connection.');
+          els.importXlsxFileInput.value = '';
           return;
         }
 
@@ -2524,16 +2610,31 @@
       }
     }, true);
 
-    // Viewer Mode Enforcement: All left clicks blocked except the Logout button
+    // Viewer Mode Enforcement: allow read-only browsing while blocking write controls
+    function isViewerAllowedInteraction(target) {
+      if (!target || typeof target.closest !== 'function') return false;
+      if (target.closest('.task-checkbox, .task-actions, .timeline-item-actions, #quickAddCard, #dataToolsCard')) {
+        return false;
+      }
+      if (target.closest('#followupCompleteBtn, #followupSnooze15Btn, #followupSnooze1hBtn, #clearCompletedBtn, #moveAllOverdueBtn, #openAddModalBtn, #emptyAddBtn, #emptySampleBtn, #mobileAddFab')) {
+        return false;
+      }
+      return Boolean(
+        target.closest(
+          '#logoutBtn, .date-nav, .scope-switcher, .search-wrap, #searchSection, .view-tabs, #densityToggleBtn, #themeToggleBtn, #notificationToggleBtn, #followupDismissBtn, #filterCategory, #filterPriority, .seg-btn[data-status], #resetFiltersBtn, .task-date-badge'
+        )
+      );
+    }
+
     document.addEventListener('click', (e) => {
       if (currentUser && currentUser.role === 'viewer') {
-        if (e.target.closest('#logoutBtn')) {
-          return; // Allow logout
+        if (isViewerAllowedInteraction(e.target)) {
+          return;
         }
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        showToast('Viewer Mode: Actions and editing are disabled. Only Log Out is available.');
+        showToast('Viewer Mode: Read-only access. Sign in as Admin to make changes.');
         return false;
       }
     }, true);
@@ -2541,15 +2642,16 @@
     ['mousedown', 'pointerdown'].forEach((evt) => {
       document.addEventListener(evt, (e) => {
         if (currentUser && currentUser.role === 'viewer') {
-          if (e.target.closest('#logoutBtn')) return;
+          if (isViewerAllowedInteraction(e.target)) return;
           e.preventDefault();
           e.stopPropagation();
         }
       }, true);
     });
 
-    // Refresh timeline "now" indicator every minute
+    // Refresh timeline "now" indicator every minute (only when tab is visible)
     setInterval(() => {
+      if (document.hidden) return;
       if (state.view === 'timeline' && state.selectedDate === Core.formatDateKey(new Date())) {
         renderTimelineView(
           Core.filterAndSortTasks(state.tasks, { date: state.selectedDate, ...state.filters })
@@ -2558,9 +2660,17 @@
     }, 60000);
     // Cloud sync with codebase storage & Vercel
     syncTasksFromServer();
-    // Poll every 4 seconds to sync admin changes with viewer in real-time
-    setInterval(syncTasksFromServer, 4000);
+    // Poll every 4 seconds when visible to sync admin changes with viewer efficiently
+    setInterval(() => {
+      if (!document.hidden) syncTasksFromServer();
+    }, 4000);
     window.addEventListener('focus', syncTasksFromServer);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        syncTasksFromServer();
+        checkFollowupDueReminders();
+      }
+    });
     // Instant cross-tab sync between admin and viewer
     window.addEventListener('storage', (e) => {
       if (e.key === STORAGE_KEY && e.newValue) {
@@ -2573,8 +2683,10 @@
         } catch {}
       }
     });
-    // Follow-up reminder poller (checks every 4 seconds)
-    setInterval(checkFollowupDueReminders, 4000);
+    // Follow-up reminder poller (checks every 4 seconds when tab is visible)
+    setInterval(() => {
+      if (!document.hidden) checkFollowupDueReminders();
+    }, 4000);
     updateNotificationStatusUI();
   }
 
