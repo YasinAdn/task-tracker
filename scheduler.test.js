@@ -593,3 +593,65 @@ test('Global search: searches everything across all dates and fields, not restri
   assert.equal(globalDirect.length, 1);
   assert.equal(globalDirect[0].id, 'task_yesterday');
 });
+
+test('Sync persistence: mergeTaskState never reverts local completions or resurrects deleted tasks from stale server seed', () => {
+  const staleServerTasks = [
+    {
+      id: 'task_6',
+      title: 'Contacted POC at E Griffin',
+      completed: false,
+      createdAt: '2026-11-12T17:37:47.641Z',
+      updatedAt: '2026-11-12T17:37:47.641Z'
+    },
+    {
+      id: 'task_7',
+      title: 'Contacted POC at Morrilton',
+      completed: false,
+      createdAt: '2026-11-12T17:37:47.641Z',
+      updatedAt: '2026-11-12T17:37:47.641Z'
+    },
+    {
+      id: 'task_9',
+      title: 'ATA Device issue at North Versailles',
+      completed: false,
+      createdAt: '2026-11-12T17:37:47.641Z',
+      updatedAt: '2026-11-12T17:37:47.641Z'
+    }
+  ];
+
+  // Admin completed task_6 locally at a newer timestamp, deleted task_7 locally, and left task_9 stale locally
+  const localTasks = [
+    {
+      id: 'task_6',
+      title: 'Contacted POC at E Griffin',
+      completed: true,
+      createdAt: '2026-11-12T17:37:47.641Z',
+      updatedAt: '2026-11-13T04:55:00.000Z'
+    },
+    {
+      id: 'task_9',
+      title: 'ATA Device issue at North Versailles',
+      completed: false,
+      createdAt: '2026-11-12T17:37:47.641Z',
+      updatedAt: '2026-11-12T17:37:47.641Z'
+    }
+  ];
+  const localDeleted = {
+    task_7: '2026-11-13T04:56:00.000Z'
+  };
+
+  const merged = Core.mergeTaskState(localTasks, staleServerTasks, localDeleted, {}, { preferLocalOnTie: true });
+  assert.equal(merged.tasks.length, 2);
+  const t6 = merged.tasks.find((t) => t.id === 'task_6');
+  assert.equal(t6.completed, true); // Local completion preserved!
+  assert.equal(merged.tasks.some((t) => t.id === 'task_7'), false); // Local deletion never resurrected!
+  assert.equal(merged.changedLocal, false);
+  assert.equal(merged.needsServerPush, true); // Detects server needs updated state!
+
+  // Fresh viewer/secondary device adopts newer updates and deletions from server
+  const viewerMerged = Core.mergeTaskState([], merged.tasks, {}, merged.deleted, { preferLocalOnTie: false });
+  assert.equal(viewerMerged.tasks.length, 2);
+  assert.equal(viewerMerged.tasks.find((t) => t.id === 'task_6').completed, true);
+  assert.equal(viewerMerged.tasks.some((t) => t.id === 'task_7'), false);
+  assert.equal(viewerMerged.changedLocal, true);
+});

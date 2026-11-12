@@ -166,24 +166,51 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
   ];
 }
 
-const TMP_FILE = path.join('/tmp', 'tasks.json');
+const Core = require('../scheduler-core.js');
+
+const TMP_FILE = path.join('/tmp', 'tasks_state_v2.json');
+const LEGACY_TMP_FILE = path.join('/tmp', 'tasks.json');
 const LOCAL_FILE = path.join(process.cwd(), 'data', 'tasks.json');
 
-let memoryTasks = null;
+let memoryState = null;
 
-function readTasksFromCodebase() {
-  if (memoryTasks && Array.isArray(memoryTasks) && memoryTasks.length > 0) {
-    return memoryTasks;
+function normalizeDeletedMap(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k && v) out[k] = String(v);
+  }
+  return out;
+}
+
+function readStateFromCodebase() {
+  if (memoryState && Array.isArray(memoryState.tasks)) {
+    return memoryState;
   }
 
-  // Try reading from /tmp (persists during serverless lambda lifetime)
+  // Try reading { tasks, deleted } from /tmp (persists during serverless lambda lifetime)
   try {
     if (fs.existsSync(TMP_FILE)) {
-      const raw = fs.readFileSync(TMP_FILE, 'utf8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        memoryTasks = parsed;
-        return memoryTasks;
+      const parsed = JSON.parse(fs.readFileSync(TMP_FILE, 'utf8'));
+      if (parsed && Array.isArray(parsed.tasks)) {
+        memoryState = {
+          tasks: parsed.tasks,
+          deleted: normalizeDeletedMap(parsed.deleted)
+        };
+        return memoryState;
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  // Legacy /tmp/tasks.json fallback
+  try {
+    if (fs.existsSync(LEGACY_TMP_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(LEGACY_TMP_FILE, 'utf8'));
+      if (Array.isArray(parsed)) {
+        memoryState = { tasks: parsed, deleted: {} };
+        return memoryState;
       }
     }
   } catch (err) {
@@ -193,11 +220,10 @@ function readTasksFromCodebase() {
   // Try reading local file in local development
   try {
     if (fs.existsSync(LOCAL_FILE)) {
-      const raw = fs.readFileSync(LOCAL_FILE, 'utf8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        memoryTasks = parsed;
-        return memoryTasks;
+      const parsed = JSON.parse(fs.readFileSync(LOCAL_FILE, 'utf8'));
+      if (Array.isArray(parsed)) {
+        memoryState = { tasks: parsed, deleted: {} };
+        return memoryState;
       }
     }
   } catch (err) {
@@ -205,24 +231,29 @@ function readTasksFromCodebase() {
   }
 
   // Fallback to bundled seed tasks
-  memoryTasks = defaultSeedTasks.slice();
-  return memoryTasks;
+  memoryState = {
+    tasks: defaultSeedTasks.slice(),
+    deleted: {}
+  };
+  return memoryState;
 }
 
-function writeTasksToCodebase(tasks) {
-  memoryTasks = tasks;
-  const jsonStr = JSON.stringify(tasks, null, 2);
+function writeStateToCodebase(tasks, deleted = {}) {
+  const cleanTasks = Array.isArray(tasks) ? tasks : [];
+  const cleanDeleted = normalizeDeletedMap(deleted);
+  memoryState = { tasks: cleanTasks, deleted: cleanDeleted };
 
-  // Write to /tmp in serverless environments
+  // Persist full state (tasks + deletion tombstones) in /tmp
   try {
-    fs.writeFileSync(TMP_FILE, jsonStr, 'utf8');
+    fs.writeFileSync(TMP_FILE, JSON.stringify(memoryState, null, 2), 'utf8');
+    fs.writeFileSync(LEGACY_TMP_FILE, JSON.stringify(cleanTasks, null, 2), 'utf8');
   } catch (err) {
-    // Not applicable on local Windows
+    // Not applicable on local Windows without /tmp
   }
 
-  // Write to local codebase file if writable
+  // Write tasks array to local codebase file when writable
   try {
-    fs.writeFileSync(LOCAL_FILE, jsonStr, 'utf8');
+    fs.writeFileSync(LOCAL_FILE, JSON.stringify(cleanTasks, null, 2), 'utf8');
   } catch (err) {
     // Serverless filesystem is read-only outside /tmp
   }
@@ -232,6 +263,9 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -239,18 +273,35 @@ module.exports = async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const tasks = readTasksFromCodebase();
-      return res.status(200).json({ ok: true, tasks, count: tasks.length });
+      const current = readStateFromCodebase();
+      return res.status(200).json({
+        ok: true,
+        tasks: current.tasks,
+        deleted: current.deleted,
+        count: current.tasks.length
+      });
     }
 
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      const tasks = readTasksFromCodebase().slice();
+      const current = readStateFromCodebase();
 
       if (body && Array.isArray(body.tasks)) {
-        // Bulk replace/sync
-        writeTasksToCodebase(body.tasks);
-        return res.status(200).json({ ok: true, count: body.tasks.length });
+        const incomingDeleted = normalizeDeletedMap(body.deleted);
+        const merged = Core.mergeTaskState(
+          current.tasks,
+          body.tasks,
+          current.deleted,
+          incomingDeleted,
+          { preferLocalOnTie: false }
+        );
+        writeStateToCodebase(merged.tasks, merged.deleted);
+        return res.status(200).json({
+          ok: true,
+          tasks: merged.tasks,
+          deleted: merged.deleted,
+          count: merged.tasks.length
+        });
       }
 
       const task = body;
@@ -258,21 +309,38 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ ok: false, error: 'Task ID, title, and date are required.' });
       }
 
-      const existingIndex = tasks.findIndex((t) => t.id === task.id);
+      const tasks = current.tasks.slice();
+      const deleted = { ...current.deleted };
       const now = new Date().toISOString();
+      const incomingUpdated = task.updatedAt || now;
       const normalized = {
         ...task,
         scope: task.scope === 'personal' ? 'personal' : 'work',
-        updatedAt: now
+        createdAt: task.createdAt || incomingUpdated,
+        updatedAt: incomingUpdated
       };
+
+      const existingIndex = tasks.findIndex((t) => t.id === task.id);
       if (existingIndex >= 0) {
-        tasks[existingIndex] = normalized;
+        const existingTs = Date.parse(tasks[existingIndex].updatedAt || tasks[existingIndex].createdAt || 0) || 0;
+        const incomingTs = Date.parse(normalized.updatedAt) || Date.now();
+        if (incomingTs >= existingTs) {
+          tasks[existingIndex] = normalized;
+        }
       } else {
-        if (!normalized.createdAt) normalized.createdAt = now;
         tasks.push(normalized);
       }
 
-      writeTasksToCodebase(tasks);
+      // Clear tombstone if task was created/updated after deletion
+      if (deleted[task.id]) {
+        const delTs = Date.parse(deleted[task.id]) || 0;
+        const incomingTs = Date.parse(normalized.updatedAt) || Date.now();
+        if (incomingTs > delTs) {
+          delete deleted[task.id];
+        }
+      }
+
+      writeStateToCodebase(tasks, deleted);
       return res.status(200).json({ ok: true, task: normalized });
     }
 
@@ -281,10 +349,11 @@ module.exports = async function handler(req, res) {
       if (!id) {
         return res.status(400).json({ ok: false, error: 'Task ID is required for deletion.' });
       }
-      let tasks = readTasksFromCodebase().slice();
-      tasks = tasks.filter((t) => t.id !== id);
-      writeTasksToCodebase(tasks);
-      return res.status(200).json({ ok: true, removedId: id });
+      const current = readStateFromCodebase();
+      const tasks = current.tasks.filter((t) => t.id !== id);
+      const deleted = { ...current.deleted, [id]: new Date().toISOString() };
+      writeStateToCodebase(tasks, deleted);
+      return res.status(200).json({ ok: true, removedId: id, deletedAt: deleted[id] });
     }
 
     return res.status(405).json({ ok: false, error: `Method ${req.method} not allowed` });

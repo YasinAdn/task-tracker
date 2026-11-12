@@ -3,6 +3,7 @@
 
   const Core = window.SchedulerCore;
   const STORAGE_KEY = 'daily_task_scheduler_v1';
+  const DELETED_KEY = 'daily_task_scheduler_deleted_v1';
   const THEME_KEY = 'daily_task_scheduler_theme_v1';
   const SCOPE_STORAGE_KEY = 'daily_task_scheduler_scope_v1';
   const HOUR_HEIGHT = 64;
@@ -19,6 +20,7 @@
 
   const state = {
     tasks: loadTasks(),
+    deleted: loadDeletedMap(),
     selectedDate: Core.formatDateKey(new Date()),
     activeScope: loadActiveScope(), // 'work' | 'personal'
     view: 'list', // 'list' | 'timeline'
@@ -311,41 +313,111 @@
   }
 
   let isSyncing = false;
+  let pendingMutationCount = 0;
+  let lastLocalMutationAt = 0;
 
-  async function syncTasksFromServer() {
-    if (isSyncing) return false;
-    isSyncing = true;
+  function markLocalMutation() {
+    lastLocalMutationAt = Date.now();
+  }
+
+  function hasLocalStoredState() {
     try {
-      const res = await fetch('/api/tasks');
-      if (!res.ok) throw new Error('API returned ' + res.status);
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.tasks)) {
-        if (data.tasks.length > 0) {
-          const incomingSerialized = JSON.stringify(data.tasks);
-          const currentSerialized = JSON.stringify(state.tasks || []);
-          if (incomingSerialized !== currentSerialized) {
-            state.tasks = data.tasks;
-            saveTasksLocally();
-            render();
-            return true;
-          }
-          return false;
-        } else if (state.tasks && state.tasks.length > 0) {
-          // If server returns empty list (e.g. fresh lambda), re-seed server from client!
-          syncBulkToServer(state.tasks);
-          return true;
-        } else {
-          // Both are empty; load sample tasks
-          state.tasks = Core.createSampleTasks(state.selectedDate);
-          saveTasksLocally();
-          render();
-          syncBulkToServer(state.tasks);
-          return true;
+      return localStorage.getItem(STORAGE_KEY) !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  function loadDeletedMap() {
+    try {
+      const raw = localStorage.getItem(DELETED_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed;
         }
       }
     } catch {
-      // Offline or static fallback: ensure tasks are never blank
-      if (!state.tasks || state.tasks.length === 0) {
+      // ignore
+    }
+    return {};
+  }
+
+  function addDeletedTombstones(ids) {
+    const now = new Date().toISOString();
+    const next = { ...(state.deleted || {}) };
+    (Array.isArray(ids) ? ids : []).forEach((id) => {
+      if (id) next[id] = now;
+    });
+    state.deleted = next;
+  }
+
+  function clearDeletedTombstones(ids) {
+    const next = { ...(state.deleted || {}) };
+    let changed = false;
+    (Array.isArray(ids) ? ids : []).forEach((id) => {
+      if (id && next[id]) {
+        delete next[id];
+        changed = true;
+      }
+    });
+    if (changed) state.deleted = next;
+  }
+
+  async function syncTasksFromServer(force = false) {
+    if (isSyncing) return false;
+    // Do not let background polling race right after a user click or while mutations are in flight
+    if (!force && (pendingMutationCount > 0 || Date.now() - lastLocalMutationAt < 3500)) {
+      return false;
+    }
+    isSyncing = true;
+    try {
+      const res = await fetch('/api/tasks', { cache: 'no-store' });
+      if (!res.ok) throw new Error('API returned ' + res.status);
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.tasks)) {
+        // Re-check mutation guard after awaiting network
+        if (pendingMutationCount > 0 || (!force && Date.now() - lastLocalMutationAt < 3500)) {
+          return false;
+        }
+        const isAdmin = Boolean(currentUser && currentUser.role === 'admin');
+        const localStored = hasLocalStoredState();
+        const serverTasks = data.tasks;
+        const serverDeleted = data.deleted && typeof data.deleted === 'object' ? data.deleted : {};
+
+        const merged = Core.mergeTaskState(
+          state.tasks,
+          serverTasks,
+          state.deleted,
+          serverDeleted,
+          { preferLocalOnTie: isAdmin && localStored }
+        );
+
+        const deletedChanged = JSON.stringify(merged.deleted) !== JSON.stringify(state.deleted || {});
+        const tasksChanged = JSON.stringify(merged.tasks) !== JSON.stringify(state.tasks || []);
+
+        if (tasksChanged || deletedChanged || !localStored) {
+          state.tasks = merged.tasks;
+          state.deleted = merged.deleted;
+          saveTasksLocally();
+          render();
+        }
+
+        // If Admin has newer local completions/deletions/edits than server (e.g. Vercel cold-started),
+        // push merged truth back up instead of losing changes.
+        if (isAdmin && merged.needsServerPush) {
+          syncBulkToServer(state.tasks, state.deleted);
+        } else if (!localStored && merged.tasks.length === 0 && Object.keys(merged.deleted).length === 0) {
+          state.tasks = Core.createSampleTasks(state.selectedDate);
+          saveTasksLocally();
+          render();
+          if (isAdmin) syncBulkToServer(state.tasks, state.deleted);
+        }
+        return tasksChanged;
+      }
+    } catch {
+      // Offline or static fallback: seed sample tasks only if user has never stored local state
+      if (!hasLocalStoredState() && (!state.tasks || state.tasks.length === 0)) {
         state.tasks = Core.createSampleTasks(state.selectedDate);
         saveTasksLocally();
         render();
@@ -358,6 +430,7 @@
 
   async function pushTaskToServer(task) {
     if (!task) return;
+    pendingMutationCount += 1;
     try {
       await fetch('/api/tasks', {
         method: 'POST',
@@ -366,55 +439,68 @@
       });
     } catch {
       // Offline fallback
+    } finally {
+      pendingMutationCount = Math.max(0, pendingMutationCount - 1);
     }
   }
 
-  async function syncBulkToServer(tasks) {
+  async function syncBulkToServer(tasks, deleted = state.deleted) {
+    pendingMutationCount += 1;
     try {
       await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tasks: tasks || [] })
+        body: JSON.stringify({
+          tasks: tasks || [],
+          deleted: deleted || {}
+        })
       });
     } catch {
       // Offline fallback
+    } finally {
+      pendingMutationCount = Math.max(0, pendingMutationCount - 1);
     }
   }
 
   async function deleteTaskFromServer(id) {
     if (!id) return;
+    pendingMutationCount += 1;
     try {
       await fetch(`/api/tasks?id=${encodeURIComponent(id)}`, {
         method: 'DELETE'
       });
     } catch {
       // Offline fallback
+    } finally {
+      pendingMutationCount = Math.max(0, pendingMutationCount - 1);
     }
   }
 
   function loadTasks() {
-    const todayKey = Core.formatDateKey(new Date());
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw !== null) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {
       // ignore
     }
-    return Core.createSampleTasks(todayKey);
+    // Wait for /api/tasks on fresh browser rather than overwriting server state with random local samples
+    return [];
   }
 
   function saveTasksLocally() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks || []));
+      localStorage.setItem(DELETED_KEY, JSON.stringify(state.deleted || {}));
     } catch {
       // ignore
     }
   }
 
   function saveTasks() {
+    markLocalMutation();
     saveTasksLocally();
   }
 
@@ -932,15 +1018,18 @@
     const res = Core.removeTask(state.tasks, id);
     if (!res.ok || !res.removed) return;
     state.tasks = res.tasks;
+    addDeletedTombstones([id]);
     saveTasks();
     render();
     deleteTaskFromServer(id);
 
     showToast(`Removed "${res.removed.title}"`, () => {
-      state.tasks = previousTasks;
+      const restored = { ...res.removed, updatedAt: new Date().toISOString() };
+      state.tasks = previousTasks.map((t) => (t.id === id ? restored : t));
+      clearDeletedTombstones([id]);
       saveTasks();
       render();
-      pushTaskToServer(res.removed);
+      pushTaskToServer(restored);
       showToast(`Restored "${res.removed.title}"`);
     });
   }
@@ -997,17 +1086,23 @@
     const previousTasks = state.tasks.slice();
     const res = Core.clearCompletedForDate(state.tasks, state.selectedDate, state.activeScope);
     if (res.removedCount === 0) return;
+    const keptIds = new Set(res.tasks.map((t) => t.id));
+    const removedIds = previousTasks.filter((t) => !keptIds.has(t.id)).map((t) => t.id);
     state.tasks = res.tasks;
+    addDeletedTombstones(removedIds);
     saveTasks();
     render();
-    syncBulkToServer(state.tasks);
+    syncBulkToServer(state.tasks, state.deleted);
 
     const scopeLabel = state.activeScope === 'personal' ? 'personal ' : 'work ';
     showToast(`Cleared ${res.removedCount} completed ${scopeLabel}task${res.removedCount === 1 ? '' : 's'}`, () => {
-      state.tasks = previousTasks;
+      const now = new Date().toISOString();
+      const removedSet = new Set(removedIds);
+      state.tasks = previousTasks.map((t) => (removedSet.has(t.id) ? { ...t, updatedAt: now } : t));
+      clearDeletedTombstones(removedIds);
       saveTasks();
       render();
-      syncBulkToServer(state.tasks);
+      syncBulkToServer(state.tasks, state.deleted);
       showToast('Restored cleared tasks');
     });
   }
@@ -2201,14 +2296,16 @@
     els.emptyAddBtn.addEventListener('click', () => openAddModal());
 
     function loadSampleDay() {
+      if (!requirePermission('add', 'Loading sample tasks')) return;
       const samples = Core.createSampleTasks(state.selectedDate);
       // Remove any existing duplicate IDs before appending
       const existingIds = new Set(state.tasks.map((t) => t.id));
       const newItems = samples.filter((s) => !existingIds.has(s.id));
+      clearDeletedTombstones(newItems.map((s) => s.id));
       state.tasks = [...state.tasks, ...newItems];
       saveTasks();
       render();
-      syncBulkToServer(state.tasks);
+      syncBulkToServer(state.tasks, state.deleted);
       showToast(`Loaded ${newItems.length || samples.length} store tasks for ${state.selectedDate}`);
     }
     els.loadSampleBtn.addEventListener('click', loadSampleDay);
@@ -2566,6 +2663,8 @@
       currentUser = res.user;
       saveAuthUser(currentUser);
       applyAuthSession();
+      render();
+      syncTasksFromServer(true);
       showToast(`Signed in as ${currentUser.displayName} (${currentUser.username})`);
     });
 
@@ -2673,14 +2772,17 @@
     });
     // Instant cross-tab sync between admin and viewer
     window.addEventListener('storage', (e) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
+      if (e.key === STORAGE_KEY && e.newValue !== null) {
         try {
           const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             state.tasks = parsed;
+            state.deleted = loadDeletedMap();
             render();
           }
         } catch {}
+      } else if (e.key === DELETED_KEY) {
+        state.deleted = loadDeletedMap();
       }
     });
     // Follow-up reminder poller (checks every 4 seconds when tab is visible)

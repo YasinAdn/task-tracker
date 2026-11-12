@@ -1296,6 +1296,119 @@
     return false;
   }
 
+  function toTimestampMs(isoOrNum) {
+    if (typeof isoOrNum === 'number' && Number.isFinite(isoOrNum)) return isoOrNum;
+    if (!isoOrNum) return 0;
+    const ms = Date.parse(String(isoOrNum));
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  /**
+   * Merges local and server task lists using per-task Last-Write-Wins timestamps
+   * plus deletion tombstones so stale/cold-started server data never reverts
+   * local completions, edits, additions, or deletions.
+   *
+   * @param {Array} localTasks
+   * @param {Array} serverTasks
+   * @param {Object<string, string>} [localDeleted]
+   * @param {Object<string, string>} [serverDeleted]
+   * @param {{ preferLocalOnTie?: boolean }} [options]
+   * @returns {{ tasks: Array, deleted: Object<string, string>, changedLocal: boolean, needsServerPush: boolean }}
+   */
+  function mergeTaskState(localTasks, serverTasks, localDeleted = {}, serverDeleted = {}, options = {}) {
+    const preferLocalOnTie = options.preferLocalOnTie !== false;
+    const localList = Array.isArray(localTasks) ? localTasks : [];
+    const serverList = Array.isArray(serverTasks) ? serverTasks : [];
+    const lDel = localDeleted && typeof localDeleted === 'object' ? localDeleted : {};
+    const sDel = serverDeleted && typeof serverDeleted === 'object' ? serverDeleted : {};
+
+    const mergedDeleted = {};
+    const delKeys = new Set([...Object.keys(lDel), ...Object.keys(sDel)]);
+    for (const id of delKeys) {
+      const lMs = toTimestampMs(lDel[id]);
+      const sMs = toTimestampMs(sDel[id]);
+      if (lMs === 0 && sMs === 0) continue;
+      mergedDeleted[id] = lMs >= sMs
+        ? new Date(lMs).toISOString()
+        : new Date(sMs).toISOString();
+    }
+
+    const localById = new Map();
+    const orderIds = [];
+    for (const t of localList) {
+      if (!t || !t.id) continue;
+      localById.set(t.id, t);
+      orderIds.push(t.id);
+    }
+
+    const serverById = new Map();
+    for (const t of serverList) {
+      if (!t || !t.id) continue;
+      serverById.set(t.id, t);
+      if (!localById.has(t.id)) {
+        orderIds.push(t.id);
+      }
+    }
+
+    const mergedTasks = [];
+    for (const id of orderIds) {
+      const lt = localById.get(id) || null;
+      const st = serverById.get(id) || null;
+      let chosen = null;
+      let chosenMs = 0;
+
+      if (lt && !st) {
+        chosen = lt;
+        chosenMs = toTimestampMs(lt.updatedAt || lt.createdAt);
+      } else if (!lt && st) {
+        chosen = st;
+        chosenMs = toTimestampMs(st.updatedAt || st.createdAt);
+      } else if (lt && st) {
+        const lMs = toTimestampMs(lt.updatedAt || lt.createdAt);
+        const sMs = toTimestampMs(st.updatedAt || st.createdAt);
+        if (lMs > sMs) {
+          chosen = lt;
+          chosenMs = lMs;
+        } else if (sMs > lMs) {
+          chosen = st;
+          chosenMs = sMs;
+        } else {
+          chosen = preferLocalOnTie ? lt : st;
+          chosenMs = lMs;
+        }
+      }
+
+      if (!chosen) continue;
+
+      const delMs = mergedDeleted[id] ? toTimestampMs(mergedDeleted[id]) : 0;
+      if (delMs > 0 && delMs >= chosenMs) {
+        // Tombstone is newer than or equal to task timestamp: keep deleted
+        continue;
+      }
+
+      // Task is alive (either never deleted or recreated/updated after deletion)
+      if (delMs > 0 && chosenMs > delMs) {
+        delete mergedDeleted[id];
+      }
+      mergedTasks.push(chosen);
+    }
+
+    const changedLocal =
+      JSON.stringify(mergedTasks) !== JSON.stringify(localList) ||
+      JSON.stringify(mergedDeleted) !== JSON.stringify(lDel);
+
+    const needsServerPush =
+      JSON.stringify(mergedTasks) !== JSON.stringify(serverList) ||
+      JSON.stringify(mergedDeleted) !== JSON.stringify(sDel);
+
+    return {
+      tasks: mergedTasks,
+      deleted: mergedDeleted,
+      changedLocal,
+      needsServerPush
+    };
+  }
+
   return {
     CATEGORIES,
     PRIORITIES,
@@ -1333,6 +1446,7 @@
     buildSpreadsheetRows,
     parseSpreadsheetRows,
     normalizeImportDate,
-    normalizeImportTime
+    normalizeImportTime,
+    mergeTaskState
   };
 });
