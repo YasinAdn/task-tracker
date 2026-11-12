@@ -55,6 +55,14 @@
           </svg>
           Export .xlsx
         </button>
+        <button type="button" class="btn btn-subtle" id="topbarImportXlsxBtn" title="Import tasks from an Excel (.xlsx) spreadsheet">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          Import .xlsx
+        </button>
         <button type="button" class="icon-btn" id="themeToggleBtn" title="Toggle dark/light theme" aria-label="Toggle theme">
           <svg id="themeIconSun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
             <circle cx="12" cy="12" r="5"></circle>
@@ -234,11 +242,13 @@
           </div>
 
           <div class="utility-actions">
-            <button type="button" class="btn btn-subtle btn-sm" id="loadSampleBtn" title="Load your 5 operational daily tasks">Store Tasks</button>
+            <button type="button" class="btn btn-subtle btn-sm" id="loadSampleBtn" title="Load your 10 operational daily tasks">Store Tasks</button>
             <button type="button" class="btn btn-subtle btn-sm" id="exportBtn" title="Export tasks to an Excel (.xlsx) spreadsheet">Export .xlsx</button>
+            <button type="button" class="btn btn-subtle btn-sm" id="importXlsxBtn" title="Import tasks from an Excel (.xlsx) spreadsheet">Import .xlsx</button>
             <button type="button" class="btn btn-subtle btn-sm" id="exportJsonBtn" title="Backup tasks as JSON">Backup JSON</button>
             <button type="button" class="btn btn-subtle btn-sm" id="importBtn" title="Restore tasks from JSON file">Restore JSON</button>
             <input type="file" id="importFileInput" accept="application/json,.json" hidden />
+            <input type="file" id="importXlsxFileInput" accept=".xlsx,.xls,.csv" hidden />
           </div>
         </section>
       </aside>
@@ -253,6 +263,7 @@
           <div class="toolbar-right">
             <span class="task-count-pill" id="visibleCountLabel">0 tasks</span>
             <button type="button" class="btn btn-subtle btn-sm" id="toolbarExportBtn" title="Export tasks to Excel (.xlsx)">📊 Export .xlsx</button>
+            <button type="button" class="btn btn-subtle btn-sm" id="toolbarImportXlsxBtn" title="Import tasks from Excel (.xlsx)">📥 Import .xlsx</button>
             <button type="button" class="btn btn-subtle btn-sm" id="clearCompletedBtn" hidden>Clear Completed</button>
           </div>
         </div>

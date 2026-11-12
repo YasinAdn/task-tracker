@@ -756,18 +756,18 @@
     const targetDate = parseDateKey(dateKey) ? dateKey : formatDateKey(new Date());
     const samples = [
       {
-        id: 'task_poc_12',
-        title: 'Contacted POC at store, no response — will check back in 2 hours',
+        id: 'task_morrilton_poc',
+        title: 'Contacted POC at Morrilton, no response — will check back in 15 mins',
         date: targetDate,
-        startTime: '09:00',
-        endTime: '09:30',
+        startTime: '21:00',
+        endTime: '21:15',
         category: 'support',
         priority: 'high',
-        notes: 'Store: Morrilton Store\nPOC: Aurora\nStatus: No answer on initial call. Scheduled follow-up in 2 hours.',
+        notes: 'Store: Morrilton\nPOC: Aurora\nStatus: Messaged on whatsapp. Missed Campaign. Scheduled follow-up in 1 hours.',
         completed: false
       },
       {
-        id: 'task_ship_11',
+        id: 'task_springdale_ship',
         title: 'Shipping ticket 1Z03G13B0339691067 made for Springdale Store',
         date: targetDate,
         startTime: '',
@@ -778,7 +778,7 @@
         completed: false
       },
       {
-        id: 'task_phone_12',
+        id: 'task_quincy_phone',
         title: 'Phone lines at Quincy are up at 8:36 pm',
         date: targetDate,
         startTime: '20:30',
@@ -789,25 +789,25 @@
         completed: true
       },
       {
-        id: 'task_ata_12',
-        title: 'ATA Device issue at Store #104 — Sent in group chat for tech review',
+        id: 'task_northversailles_ata',
+        title: 'ATA Device issue at North Versailles — Sent in group along with MAC',
         date: targetDate,
-        startTime: '11:30',
-        endTime: '12:00',
+        startTime: '21:00',
+        endTime: '21:30',
         category: 'hardware',
         priority: 'high',
-        notes: 'Store: Store #104\nHardware: ATA (Analog Telephone Adapter)\nSymptoms: Offline / No dial tone\nAction: Sent in group chat for tech review',
+        notes: 'Store: North Versailles\nHardware: ATA (Analog Telephone Adapter)\nSymptoms: Keeps malfunctioning\nAction: Sent in group along with MAC',
         completed: false
       },
       {
-        id: 'task_supplies_12',
-        title: 'Mailed supplies for Springdale Store for AC issue',
+        id: 'task_huntington_supplies',
+        title: 'Mailed supplies for Huntington for Printer Roller Issue',
         date: targetDate,
         startTime: '14:00',
         endTime: '14:30',
         category: 'supplies',
         priority: 'medium',
-        notes: 'Store: Springdale Store\nIssue: AC unit power supply\nSupplies: Replacement adapter and patch cables\nStatus: Packed and mailed',
+        notes: 'Store: Huntington\nIssue: Printer Roller Issue\nSupplies: Mailed to Supplies\nStatus: Mailed',
         completed: false
       }
     ];
@@ -874,6 +874,179 @@
         'Created': t.createdAt ? new Date(t.createdAt).toLocaleString() : ''
       };
     });
+  }
+
+  function normalizeImportDate(val, fallbackDate = '') {
+    if (!val && val !== 0) return fallbackDate;
+    if (val instanceof Date && !isNaN(val)) {
+      return formatDateKey(val);
+    }
+    const str = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+    const num = Number(str);
+    if (!isNaN(num) && num > 30000 && num < 60000) {
+      const utcDays = Math.floor(num - 25569);
+      const date = new Date(utcDays * 86400 * 1000);
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    const mSlash = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (mSlash) {
+      const m = mSlash[1].padStart(2, '0');
+      const d = mSlash[2].padStart(2, '0');
+      const y = mSlash[3];
+      return `${y}-${m}-${d}`;
+    }
+    const mDash = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+    if (mDash) {
+      const d = mDash[1].padStart(2, '0');
+      const m = mDash[2].padStart(2, '0');
+      const y = mDash[3];
+      return `${y}-${m}-${d}`;
+    }
+    return fallbackDate;
+  }
+
+  function normalizeImportTime(val) {
+    if (!val) return '';
+    const str = String(val).trim();
+    if (!str || str.toLowerCase() === 'anytime' || str.toLowerCase() === 'n/a') return '';
+
+    const m12 = str.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)$/i);
+    if (m12) {
+      let hours = parseInt(m12[1], 10);
+      const mins = m12[2];
+      const meridiem = m12[3].toLowerCase();
+      if (meridiem === 'pm' && hours < 12) hours += 12;
+      if (meridiem === 'am' && hours === 12) hours = 0;
+      return `${String(hours).padStart(2, '0')}:${mins}`;
+    }
+
+    const m24 = str.match(/^(\d{1,2}):(\d{2})/);
+    if (m24) {
+      const hours = parseInt(m24[1], 10);
+      const mins = m24[2];
+      if (hours >= 0 && hours <= 23) {
+        return `${String(hours).padStart(2, '0')}:${mins}`;
+      }
+    }
+
+    if (!isNaN(str) && Number(str) >= 0 && Number(str) < 1) {
+      const totalMinutes = Math.round(Number(str) * 1440);
+      return minutesToTime(totalMinutes);
+    }
+
+    return '';
+  }
+
+  function normalizeImportCategory(val) {
+    if (!val) return 'support';
+    const str = String(val).trim().toLowerCase();
+    for (const [key, conf] of Object.entries(CATEGORIES)) {
+      if (str === key || str === conf.label.toLowerCase()) return key;
+    }
+    if (str.includes('support') || str.includes('poc')) return 'support';
+    if (str.includes('shipping') || str.includes('logistic')) return 'shipping';
+    if (str.includes('telecom') || str.includes('phone')) return 'telecom';
+    if (str.includes('hardware') || str.includes('ata') || str.includes('device')) return 'hardware';
+    if (str.includes('supplies') || str.includes('mail')) return 'supplies';
+    return 'other';
+  }
+
+  function normalizeImportPriority(val) {
+    if (!val) return 'medium';
+    const str = String(val).trim().toLowerCase();
+    if (str === 'high' || str === 'urgent') return 'high';
+    if (str === 'low') return 'low';
+    return 'medium';
+  }
+
+  function normalizeImportStatus(val) {
+    if (val === true || val === 1) return true;
+    if (!val) return false;
+    const str = String(val).trim().toLowerCase();
+    return str === 'completed' || str === 'done' || str === 'true' || str === 'yes' || str === '1';
+  }
+
+  /**
+   * Parses rows from imported Excel (.xlsx) or CSV data into validated application tasks.
+   * @param {Array<Object>} rows
+   * @param {Array<Object>} existingTasks
+   * @param {string} defaultDate
+   * @returns {{ tasks: Array<Object>, importedCount: number, errors: Array<string> }}
+   */
+  function parseSpreadsheetRows(rows, existingTasks = [], defaultDate = '') {
+    const list = Array.isArray(rows) ? rows : [];
+    const baseDate = defaultDate || formatDateKey(new Date());
+    let currentTasks = Array.isArray(existingTasks) ? existingTasks.slice() : [];
+    let importedCount = 0;
+    const errors = [];
+
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (!r || typeof r !== 'object') continue;
+
+      const title = String(
+        r['Task Title'] || r['Title'] || r['Task'] || r['title'] || r['task'] || ''
+      ).trim();
+
+      if (!title) {
+        continue;
+      }
+
+      const rawDate = r['Date'] || r['date'] || baseDate;
+      const date = normalizeImportDate(rawDate, baseDate);
+      const rawStart = r['Start Time'] || r['Start'] || r['startTime'] || r['start'] || '';
+      const rawEnd = r['End Time'] || r['End'] || r['endTime'] || r['end'] || '';
+      const startTime = normalizeImportTime(rawStart);
+      const endTime = normalizeImportTime(rawEnd);
+      const category = normalizeImportCategory(r['Category'] || r['category']);
+      const priority = normalizeImportPriority(r['Priority'] || r['priority']);
+      const completed = normalizeImportStatus(r['Status'] || r['status'] || r['completed'] || r['Completed']);
+      const notes = String(
+        r['Notes / Details'] || r['Notes'] || r['notes'] || r['Details'] || r['details'] || ''
+      ).trim();
+
+      const candidate = {
+        title,
+        date,
+        startTime,
+        endTime,
+        category,
+        priority,
+        completed,
+        notes
+      };
+
+      const existingIdx = currentTasks.findIndex(
+        (t) => t.date === date && t.title.toLowerCase() === title.toLowerCase()
+      );
+
+      if (existingIdx >= 0) {
+        currentTasks[existingIdx] = {
+          ...currentTasks[existingIdx],
+          ...candidate,
+          updatedAt: new Date().toISOString()
+        };
+        importedCount += 1;
+      } else {
+        const added = addTask(currentTasks, candidate);
+        if (added.ok) {
+          currentTasks = added.tasks;
+          importedCount += 1;
+        } else {
+          errors.push(`Row ${i + 1}: ${added.errors.join('; ')}`);
+        }
+      }
+    }
+
+    return {
+      tasks: currentTasks,
+      importedCount,
+      errors
+    };
   }
 
   /**
@@ -973,6 +1146,9 @@
     computeDailyStats,
     createSampleTasks,
     filterTasksForExport,
-    buildSpreadsheetRows
+    buildSpreadsheetRows,
+    parseSpreadsheetRows,
+    normalizeImportDate,
+    normalizeImportTime
   };
 });

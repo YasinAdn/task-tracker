@@ -380,3 +380,46 @@ test('RBAC: canUserPerformAction enforces viewer restrictions', () => {
   assert.equal(Core.canUserPerformAction('viewer', 'delete'), false);
   assert.equal(Core.canUserPerformAction('viewer', 'export'), false);
 });
+
+test('parseSpreadsheetRows imports Excel rows and normalizes times, categories, and dates', () => {
+  const sampleRows = [
+    {
+      'Date': '2026-11-12',
+      'Start Time': '8:30 PM',
+      'End Time': '8:45 PM',
+      'Task Title': 'Phone lines at Quincy are up at 8:36 pm',
+      'Category': 'Phone & Telecom',
+      'Priority': 'Medium',
+      'Status': 'Completed',
+      'Notes / Details': 'Inbound and outbound calls operational'
+    },
+    {
+      'Date': '2026-11-12',
+      'Start Time': 'Anytime',
+      'End Time': '',
+      'Task Title': 'Printer and scanner Issue Freedom Dr',
+      'Category': 'Store Support / POC',
+      'Priority': 'Medium',
+      'Status': 'Completed',
+      'Notes / Details': 'Sent to supplies'
+    }
+  ];
+
+  const result = Core.parseSpreadsheetRows(sampleRows, [], '2026-11-12');
+  assert.equal(result.importedCount, 2);
+  assert.equal(result.tasks.length, 2);
+
+  const t1 = result.tasks.find((t) => t.title.includes('Quincy'));
+  assert.ok(t1);
+  assert.equal(t1.startTime, '20:30');
+  assert.equal(t1.endTime, '20:45');
+  assert.equal(t1.category, 'telecom');
+  assert.equal(t1.completed, true);
+
+  const t2 = result.tasks.find((t) => t.title.includes('Freedom Dr'));
+  assert.ok(t2);
+  assert.equal(t2.startTime, '');
+  assert.equal(t2.endTime, '');
+  assert.equal(t2.category, 'support');
+  assert.equal(t2.completed, true);
+});

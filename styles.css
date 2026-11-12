@@ -1688,6 +1688,7 @@ body.role-viewer .topbar .date-nav,
 body.role-viewer .topbar .search-wrap,
 body.role-viewer #openAddModalBtn,
 body.role-viewer #topbarExportBtn,
+body.role-viewer #topbarImportXlsxBtn,
 body.role-viewer #themeToggleBtn {
   pointer-events: none !important;
   opacity: 0.88;

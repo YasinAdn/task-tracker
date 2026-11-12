@@ -56,6 +56,10 @@
     resetFiltersBtn: document.getElementById('resetFiltersBtn'),
     loadSampleBtn: document.getElementById('loadSampleBtn'),
     exportBtn: document.getElementById('exportBtn'),
+    importXlsxBtn: document.getElementById('importXlsxBtn'),
+    importXlsxFileInput: document.getElementById('importXlsxFileInput'),
+    topbarImportXlsxBtn: document.getElementById('topbarImportXlsxBtn'),
+    toolbarImportXlsxBtn: document.getElementById('toolbarImportXlsxBtn'),
     exportJsonBtn: document.getElementById('exportJsonBtn'),
     importBtn: document.getElementById('importBtn'),
     importFileInput: document.getElementById('importFileInput'),
@@ -1493,6 +1497,7 @@
           state.tasks = next;
           saveTasks();
           render();
+          syncBulkToServer(state.tasks);
           showToast(`Imported ${importedCount} task${importedCount === 1 ? '' : 's'}`);
         } catch {
           showToast('Invalid JSON file. Could not import tasks.');
@@ -1502,6 +1507,63 @@
       };
       reader.readAsText(file);
     });
+
+    // Excel (.xlsx / .xls / .csv) Spreadsheet Import
+    function triggerXlsxImport() {
+      if (currentUser && currentUser.role === 'viewer') {
+        showToast('Viewer Mode: Importing tasks is disabled.');
+        return;
+      }
+      if (els.importXlsxFileInput) {
+        els.importXlsxFileInput.click();
+      }
+    }
+
+    if (els.topbarImportXlsxBtn) {
+      els.topbarImportXlsxBtn.addEventListener('click', triggerXlsxImport);
+    }
+    if (els.toolbarImportXlsxBtn) {
+      els.toolbarImportXlsxBtn.addEventListener('click', triggerXlsxImport);
+    }
+    if (els.importXlsxBtn) {
+      els.importXlsxBtn.addEventListener('click', triggerXlsxImport);
+    }
+
+    if (els.importXlsxFileInput) {
+      els.importXlsxFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        if (typeof XLSX === 'undefined') {
+          showToast('Excel library is still loading. Please try again in a moment.');
+          return;
+        }
+
+        try {
+          const buffer = await file.arrayBuffer();
+          const wb = XLSX.read(buffer, { type: 'array' });
+          const sheetName = wb.SheetNames[0];
+          if (!sheetName) throw new Error('No sheet found in workbook');
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+          if (!rows || rows.length === 0) {
+            showToast('No task rows found in spreadsheet.');
+            return;
+          }
+
+          const res = Core.parseSpreadsheetRows(rows, state.tasks, state.selectedDate);
+          state.tasks = res.tasks;
+          saveTasks();
+          render();
+          syncBulkToServer(state.tasks);
+          showToast(`Successfully imported ${res.importedCount} task${res.importedCount === 1 ? '' : 's'} from Excel (.xlsx)`);
+        } catch (err) {
+          console.error('XLSX Import Error:', err);
+          showToast('Could not parse Excel spreadsheet. Please ensure valid .xlsx format.');
+        } finally {
+          els.importXlsxFileInput.value = '';
+        }
+      });
+    }
 
     // Modal interactions
     els.closeModalBtn.addEventListener('click', closeModal);
