@@ -10,7 +10,8 @@
     "completed": false,
     "notes": "Status: Shipping label created",
     "createdAt": "2026-11-12T17:37:47.640Z",
-    "updatedAt": "2026-11-12T17:37:47.640Z"
+    "updatedAt": "2026-11-12T17:37:47.640Z",
+    "scope": "work"
   },
   {
     "id": "task_2",
@@ -23,7 +24,8 @@
     "completed": false,
     "notes": "Ticket #: N/A\nStore: Melrose\nItems: ATA\nStatus: Message sent in group",
     "createdAt": "2026-11-12T17:37:47.640Z",
-    "updatedAt": "2026-11-12T17:37:47.640Z"
+    "updatedAt": "2026-11-12T17:37:47.640Z",
+    "scope": "work"
   },
   {
     "id": "task_3",
@@ -36,7 +38,8 @@
     "completed": true,
     "notes": "Printer and Scanner not working. Sent to supplies",
     "createdAt": "2026-11-12T17:37:47.640Z",
-    "updatedAt": "2026-11-12T17:37:47.640Z"
+    "updatedAt": "2026-11-12T17:37:47.640Z",
+    "scope": "work"
   },
   {
     "id": "task_4",
@@ -49,7 +52,8 @@
     "completed": false,
     "notes": "Store: Huntington\nIssue: Printer Roller Issue\nSupplies: Mailed to Supplies\nStatus: Mailed",
     "createdAt": "2026-11-12T17:37:47.640Z",
-    "updatedAt": "2026-11-12T17:37:47.640Z"
+    "updatedAt": "2026-11-12T17:37:47.640Z",
+    "scope": "work"
   },
   {
     "id": "task_5",
@@ -62,7 +66,8 @@
     "completed": true,
     "notes": "Store: Quincy\nStatus: Inbound and outbound calls verified operational\nTime verified: 8:36 pm",
     "createdAt": "2026-11-12T17:37:47.641Z",
-    "updatedAt": "2026-11-12T17:37:47.641Z"
+    "updatedAt": "2026-11-12T17:37:47.641Z",
+    "scope": "work"
   },
   {
     "id": "task_6",
@@ -75,7 +80,8 @@
     "completed": false,
     "notes": "Store: E Griffin\nPOC: Leslie\nStatus: Messaged on whatsapp. Other IT Issue. Scheduled follow-up in 1 hours.",
     "createdAt": "2026-11-12T17:37:47.641Z",
-    "updatedAt": "2026-11-12T17:37:47.641Z"
+    "updatedAt": "2026-11-12T17:37:47.641Z",
+    "scope": "work"
   },
   {
     "id": "task_7",
@@ -88,7 +94,8 @@
     "completed": false,
     "notes": "Store: Morrilton\nPOC: Aurora\nStatus: Messaged on whatsapp. Missed Campaign. Scheduled follow-up in 1 hours.",
     "createdAt": "2026-11-12T17:37:47.641Z",
-    "updatedAt": "2026-11-12T17:37:47.641Z"
+    "updatedAt": "2026-11-12T17:37:47.641Z",
+    "scope": "work"
   },
   {
     "id": "task_8",
@@ -101,7 +108,8 @@
     "completed": false,
     "notes": "Need to confirm phone calling status at melrose. Contacted POC",
     "createdAt": "2026-11-12T17:37:47.641Z",
-    "updatedAt": "2026-11-12T17:37:47.641Z"
+    "updatedAt": "2026-11-12T17:37:47.641Z",
+    "scope": "work"
   },
   {
     "id": "task_9",
@@ -114,7 +122,8 @@
     "completed": false,
     "notes": "Store: North Versailles\nHardware: ATA (Analog Telephone Adapter)\nSymptoms: Keeps malfunctioning\nAction: Sent in group along with MAC",
     "createdAt": "2026-11-12T17:37:47.641Z",
-    "updatedAt": "2026-11-12T17:37:47.641Z"
+    "updatedAt": "2026-11-12T17:37:47.641Z",
+    "scope": "work"
   },
   {
     "id": "task_10",
@@ -127,6 +136,7 @@
     "completed": false,
     "notes": "Store: Galveston\nPOC: Elvis\nStatus: Messaged on whatsapp. Other IT Issue. Scheduled follow-up in 1 hours.",
     "createdAt": "2026-11-12T17:37:47.641Z",
-    "updatedAt": "2026-11-12T17:37:47.641Z"
+    "updatedAt": "2026-11-12T17:37:47.641Z",
+    "scope": "work"
   }
 ]

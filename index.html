@@ -36,6 +36,20 @@
         </button>
       </div>
 
+      <!-- Scope Switcher: Work vs Personal -->
+      <div class="scope-switcher" role="group" aria-label="Task Section Switcher">
+        <button type="button" class="scope-btn active" id="scopeWorkBtn" data-scope="work" title="Switch to Work Tasks">
+          <span class="scope-btn-icon">💼</span>
+          <span class="scope-btn-text">Work</span>
+          <span class="scope-badge" id="workCountBadge">0</span>
+        </button>
+        <button type="button" class="scope-btn" id="scopePersonalBtn" data-scope="personal" title="Switch to Personal Tasks">
+          <span class="scope-btn-icon">👤</span>
+          <span class="scope-btn-text">Personal</span>
+          <span class="scope-badge" id="personalCountBadge">0</span>
+        </button>
+      </div>
+
       <div class="topbar-actions">
         <div class="search-wrap">
           <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -128,6 +142,15 @@
 
           <form id="quickAddForm" class="quick-form" novalidate>
             <div class="field">
+              <label>Task Section</label>
+              <div class="segmented scope-form-segmented" role="group" aria-label="Quick add section selection">
+                <button type="button" class="seg-btn scope-form-btn active" data-scope-target="quick" data-scope="work">💼 Work</button>
+                <button type="button" class="seg-btn scope-form-btn" data-scope-target="quick" data-scope="personal">👤 Personal</button>
+              </div>
+              <input type="hidden" id="quickScope" value="work" />
+            </div>
+
+            <div class="field">
               <label for="quickTitle">Task title</label>
               <input type="text" id="quickTitle" placeholder="e.g., Contacted POC at store #104" maxlength="160" required />
             </div>
@@ -155,11 +178,20 @@
               <div class="field">
                 <label for="quickCategory">Category</label>
                 <select id="quickCategory">
-                  <option value="support">Store Support / POC</option>
-                  <option value="shipping">Shipping & Logistics</option>
-                  <option value="telecom">Phone & Telecom</option>
-                  <option value="hardware">Hardware / ATA</option>
-                  <option value="supplies">Mailed Supplies</option>
+                  <optgroup label="Work Categories" id="quickWorkCats">
+                    <option value="support">Store Support / POC</option>
+                    <option value="shipping">Shipping & Logistics</option>
+                    <option value="telecom">Phone & Telecom</option>
+                    <option value="hardware">Hardware / ATA</option>
+                    <option value="supplies">Mailed Supplies</option>
+                  </optgroup>
+                  <optgroup label="Personal Categories" id="quickPersonalCats">
+                    <option value="personal">Personal & Family</option>
+                    <option value="errands">Errands & Shopping</option>
+                    <option value="health">Health & Fitness</option>
+                    <option value="finance">Finance & Bills</option>
+                    <option value="learning">Learning & Growth</option>
+                  </optgroup>
                   <option value="other">General / Other</option>
                 </select>
               </div>
@@ -222,11 +254,20 @@
               <label for="filterCategory">Category</label>
               <select id="filterCategory">
                 <option value="all">All</option>
-                <option value="support">Store Support / POC</option>
-                <option value="shipping">Shipping & Logistics</option>
-                <option value="telecom">Phone & Telecom</option>
-                <option value="hardware">Hardware / ATA</option>
-                <option value="supplies">Mailed Supplies</option>
+                <optgroup label="Work Categories" id="filterWorkCats">
+                  <option value="support">Store Support / POC</option>
+                  <option value="shipping">Shipping & Logistics</option>
+                  <option value="telecom">Phone & Telecom</option>
+                  <option value="hardware">Hardware / ATA</option>
+                  <option value="supplies">Mailed Supplies</option>
+                </optgroup>
+                <optgroup label="Personal Categories" id="filterPersonalCats">
+                  <option value="personal">Personal & Family</option>
+                  <option value="errands">Errands & Shopping</option>
+                  <option value="health">Health & Fitness</option>
+                  <option value="finance">Finance & Bills</option>
+                  <option value="learning">Learning & Growth</option>
+                </optgroup>
                 <option value="other">General / Other</option>
               </select>
             </div>
@@ -357,6 +398,15 @@
         </div>
 
         <div class="field">
+          <label>Task Section</label>
+          <div class="segmented scope-form-segmented" role="group" aria-label="Modal section selection">
+            <button type="button" class="seg-btn scope-form-btn active" data-scope-target="modal" data-scope="work">💼 Work</button>
+            <button type="button" class="seg-btn scope-form-btn" data-scope-target="modal" data-scope="personal">👤 Personal</button>
+          </div>
+          <input type="hidden" id="modalScopeInput" value="work" />
+        </div>
+
+        <div class="field">
           <label for="modalTitleInput">Task title</label>
           <input type="text" id="modalTitleInput" placeholder="What needs to get done?" maxlength="160" required />
         </div>
@@ -388,11 +438,20 @@
           <div class="field">
             <label for="modalCategoryInput">Category</label>
             <select id="modalCategoryInput">
-              <option value="support">Store Support / POC</option>
-              <option value="shipping">Shipping & Logistics</option>
-              <option value="telecom">Phone & Telecom</option>
-              <option value="hardware">Hardware / ATA</option>
-              <option value="supplies">Mailed Supplies</option>
+              <optgroup label="Work Categories" id="modalWorkCats">
+                <option value="support">Store Support / POC</option>
+                <option value="shipping">Shipping & Logistics</option>
+                <option value="telecom">Phone & Telecom</option>
+                <option value="hardware">Hardware / ATA</option>
+                <option value="supplies">Mailed Supplies</option>
+              </optgroup>
+              <optgroup label="Personal Categories" id="modalPersonalCats">
+                <option value="personal">Personal & Family</option>
+                <option value="errands">Errands & Shopping</option>
+                <option value="health">Health & Fitness</option>
+                <option value="finance">Finance & Bills</option>
+                <option value="learning">Learning & Growth</option>
+              </optgroup>
               <option value="other">General / Other</option>
             </select>
           </div>

@@ -423,3 +423,57 @@ test('parseSpreadsheetRows imports Excel rows and normalizes times, categories, 
   assert.equal(t2.category, 'support');
   assert.equal(t2.completed, true);
 });
+
+test('Work and Personal scope isolation in filterAndSortTasks, computeDailyStats, and clearCompleted', () => {
+  const mixedTasks = [
+    { id: '1', title: 'Work Task 1', date: '2026-11-12', startTime: '09:00', endTime: '10:00', scope: 'work', completed: false, category: 'support', priority: 'medium' },
+    { id: '2', title: 'Work Task 2 Completed', date: '2026-11-12', startTime: '11:00', endTime: '12:00', scope: 'work', completed: true, category: 'telecom', priority: 'low' },
+    { id: '3', title: 'Personal Task 1', date: '2026-11-12', startTime: '18:00', endTime: '19:00', scope: 'personal', completed: false, category: 'fitness', priority: 'high' },
+    { id: '4', title: 'Personal Task 2 Completed', date: '2026-11-12', startTime: '', endTime: '', scope: 'personal', completed: true, category: 'errands', priority: 'medium' },
+    { id: '5', title: 'Overdue Work Task', date: '2026-11-11', startTime: '15:00', endTime: '16:00', scope: 'work', completed: false, category: 'shipping', priority: 'high' },
+    { id: '6', title: 'Overdue Personal Task', date: '2026-11-11', startTime: '', endTime: '', scope: 'personal', completed: false, category: 'finance', priority: 'medium' }
+  ];
+
+  // Filtering by work scope
+  const workGrouped = Core.filterAndSortTasks(mixedTasks, { date: '2026-11-12', scope: 'work' });
+  assert.equal(workGrouped.all.length, 3); // 2 on date + 1 overdue
+  assert.equal(workGrouped.overdue.length, 1);
+  assert.equal(workGrouped.overdue[0].id, '5');
+  assert.equal(workGrouped.scheduled.length, 2);
+
+  // Filtering by personal scope
+  const personalGrouped = Core.filterAndSortTasks(mixedTasks, { date: '2026-11-12', scope: 'personal' });
+  assert.equal(personalGrouped.all.length, 3); // 2 on date + 1 overdue
+  assert.equal(personalGrouped.overdue.length, 1);
+  assert.equal(personalGrouped.overdue[0].id, '6');
+  assert.equal(personalGrouped.scheduled.length, 1);
+  assert.equal(personalGrouped.anytime.length, 1);
+
+  // Stats for work scope
+  const workStats = Core.computeDailyStats(mixedTasks, '2026-11-12', 'work');
+  assert.equal(workStats.total, 2);
+  assert.equal(workStats.totalWithOverdue, 3);
+  assert.equal(workStats.completed, 1);
+  assert.equal(workStats.overdueCount, 1);
+
+  // Stats for personal scope
+  const personalStats = Core.computeDailyStats(mixedTasks, '2026-11-12', 'personal');
+  assert.equal(personalStats.total, 2);
+  assert.equal(personalStats.totalWithOverdue, 3);
+  assert.equal(personalStats.completed, 1);
+  assert.equal(personalStats.overdueCount, 1);
+
+  // Clear completed personal tasks only
+  const clearedPersonal = Core.clearCompletedForDate(mixedTasks, '2026-11-12', 'personal');
+  assert.equal(clearedPersonal.removedCount, 1);
+  assert.ok(clearedPersonal.tasks.some((t) => t.id === '2')); // Work completed task preserved!
+  assert.ok(!clearedPersonal.tasks.some((t) => t.id === '4')); // Personal completed task removed
+
+  // Move overdue work tasks only
+  const movedWork = Core.moveAllOverdueToDate(mixedTasks, '2026-11-12', 'work');
+  assert.equal(movedWork.movedCount, 1);
+  const task5 = movedWork.tasks.find((t) => t.id === '5');
+  const task6 = movedWork.tasks.find((t) => t.id === '6');
+  assert.equal(task5.date, '2026-11-12'); // Moved to today
+  assert.equal(task6.date, '2026-11-11'); // Personal overdue kept untouched
+});

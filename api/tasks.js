@@ -33,6 +33,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "medium",
       completed: false,
       notes: "Status: Shipping label created",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.640Z",
       updatedAt: "2026-11-12T17:37:47.640Z"
     },
@@ -46,6 +47,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "medium",
       completed: false,
       notes: "Ticket #: N/A\nStore: Melrose\nItems: ATA\nStatus: Message sent in group",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.640Z",
       updatedAt: "2026-11-12T17:37:47.640Z"
     },
@@ -59,6 +61,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "medium",
       completed: true,
       notes: "Printer and Scanner not working. Sent to supplies",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.640Z",
       updatedAt: "2026-11-12T17:37:47.640Z"
     },
@@ -72,6 +75,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "medium",
       completed: false,
       notes: "Store: Huntington\nIssue: Printer Roller Issue\nSupplies: Mailed to Supplies\nStatus: Mailed",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.640Z",
       updatedAt: "2026-11-12T17:37:47.640Z"
     },
@@ -85,6 +89,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "medium",
       completed: true,
       notes: "Store: Quincy\nStatus: Inbound and outbound calls verified operational\nTime verified: 8:36 pm",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.641Z",
       updatedAt: "2026-11-12T17:37:47.641Z"
     },
@@ -98,6 +103,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "high",
       completed: false,
       notes: "Store: E Griffin\nPOC: Leslie\nStatus: Messaged on whatsapp. Other IT Issue. Scheduled follow-up in 1 hours.",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.641Z",
       updatedAt: "2026-11-12T17:37:47.641Z"
     },
@@ -111,6 +117,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "high",
       completed: false,
       notes: "Store: Morrilton\nPOC: Aurora\nStatus: Messaged on whatsapp. Missed Campaign. Scheduled follow-up in 1 hours.",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.641Z",
       updatedAt: "2026-11-12T17:37:47.641Z"
     },
@@ -124,6 +131,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "medium",
       completed: false,
       notes: "Need to confirm phone calling status at melrose. Contacted POC",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.641Z",
       updatedAt: "2026-11-12T17:37:47.641Z"
     },
@@ -137,6 +145,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "high",
       completed: false,
       notes: "Store: North Versailles\nHardware: ATA (Analog Telephone Adapter)\nSymptoms: Keeps malfunctioning\nAction: Sent in group along with MAC",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.641Z",
       updatedAt: "2026-11-12T17:37:47.641Z"
     },
@@ -150,6 +159,7 @@ if (!Array.isArray(defaultSeedTasks) || defaultSeedTasks.length === 0) {
       priority: "high",
       completed: false,
       notes: "Store: Galveston\nPOC: Elvis\nStatus: Messaged on whatsapp. Other IT Issue. Scheduled follow-up in 1 hours.",
+      scope: "work",
       createdAt: "2026-11-12T17:37:47.641Z",
       updatedAt: "2026-11-12T17:37:47.641Z"
     }
@@ -252,6 +262,7 @@ module.exports = async function handler(req, res) {
       const now = new Date().toISOString();
       const normalized = {
         ...task,
+        scope: task.scope === 'personal' ? 'personal' : 'work',
         updatedAt: now
       };
       if (existingIndex >= 0) {

@@ -4,11 +4,23 @@
   const Core = window.SchedulerCore;
   const STORAGE_KEY = 'daily_task_scheduler_v1';
   const THEME_KEY = 'daily_task_scheduler_theme_v1';
+  const SCOPE_STORAGE_KEY = 'daily_task_scheduler_scope_v1';
   const HOUR_HEIGHT = 64;
+
+  function loadActiveScope() {
+    try {
+      const saved = localStorage.getItem(SCOPE_STORAGE_KEY);
+      if (saved === 'personal' || saved === 'work') return saved;
+    } catch {
+      // ignore
+    }
+    return 'work';
+  }
 
   const state = {
     tasks: loadTasks(),
     selectedDate: Core.formatDateKey(new Date()),
+    activeScope: loadActiveScope(), // 'work' | 'personal'
     view: 'list', // 'list' | 'timeline'
     filters: {
       status: 'all',
@@ -33,8 +45,15 @@
     themeIconSun: document.getElementById('themeIconSun'),
     themeIconMoon: document.getElementById('themeIconMoon'),
 
+    // Scope switcher in header & count badges
+    scopeWorkBtn: document.getElementById('scopeWorkBtn'),
+    scopePersonalBtn: document.getElementById('scopePersonalBtn'),
+    workCountBadge: document.getElementById('workCountBadge'),
+    personalCountBadge: document.getElementById('personalCountBadge'),
+
     // Quick add form
     quickAddForm: document.getElementById('quickAddForm'),
+    quickScopeInput: document.getElementById('quickScope'),
     quickTitle: document.getElementById('quickTitle'),
     quickStart: document.getElementById('quickStart'),
     quickEnd: document.getElementById('quickEnd'),
@@ -101,6 +120,7 @@
     closeModalBtn: document.getElementById('closeModalBtn'),
     modalForm: document.getElementById('modalForm'),
     modalTaskId: document.getElementById('modalTaskId'),
+    modalScopeInput: document.getElementById('modalScopeInput'),
     modalTitleInput: document.getElementById('modalTitleInput'),
     modalDateInput: document.getElementById('modalDateInput'),
     modalStartInput: document.getElementById('modalStartInput'),
@@ -365,6 +385,65 @@
     }
   }
 
+  /* -------------------- Work vs Personal Scope Switcher -------------------- */
+
+  function setActiveScope(scope) {
+    const clean = scope === 'personal' ? 'personal' : 'work';
+    state.activeScope = clean;
+    try {
+      localStorage.setItem(SCOPE_STORAGE_KEY, clean);
+    } catch {
+      // ignore
+    }
+
+    if (els.scopeWorkBtn && els.scopePersonalBtn) {
+      els.scopeWorkBtn.classList.toggle('active', clean === 'work');
+      els.scopePersonalBtn.classList.toggle('active', clean === 'personal');
+      els.scopeWorkBtn.setAttribute('aria-selected', String(clean === 'work'));
+      els.scopePersonalBtn.setAttribute('aria-selected', String(clean === 'personal'));
+    }
+
+    setFormScope('quick', clean);
+    render();
+  }
+
+  function setFormScope(target, scope) {
+    const clean = scope === 'personal' ? 'personal' : 'work';
+    if (target === 'quick') {
+      if (els.quickScopeInput) els.quickScopeInput.value = clean;
+      document.querySelectorAll('.scope-form-btn[data-scope-target="quick"]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.scope === clean);
+      });
+      if (clean === 'personal' && els.quickCategory) {
+        const workCats = ['support', 'shipping', 'telecom', 'hardware', 'supplies'];
+        if (workCats.includes(els.quickCategory.value)) {
+          els.quickCategory.value = 'personal';
+        }
+      } else if (clean === 'work' && els.quickCategory) {
+        const personalCats = ['personal', 'errands', 'health', 'finance', 'learning'];
+        if (personalCats.includes(els.quickCategory.value)) {
+          els.quickCategory.value = 'support';
+        }
+      }
+    } else if (target === 'modal') {
+      if (els.modalScopeInput) els.modalScopeInput.value = clean;
+      document.querySelectorAll('.scope-form-btn[data-scope-target="modal"]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.scope === clean);
+      });
+      if (clean === 'personal' && els.modalCategoryInput) {
+        const workCats = ['support', 'shipping', 'telecom', 'hardware', 'supplies'];
+        if (workCats.includes(els.modalCategoryInput.value)) {
+          els.modalCategoryInput.value = 'personal';
+        }
+      } else if (clean === 'work' && els.modalCategoryInput) {
+        const personalCats = ['personal', 'errands', 'health', 'finance', 'learning'];
+        if (personalCats.includes(els.modalCategoryInput.value)) {
+          els.modalCategoryInput.value = 'support';
+        }
+      }
+    }
+  }
+
   /* -------------------- Date & Time Formatting -------------------- */
 
   function formatDisplayDate(dateKey) {
@@ -461,9 +540,14 @@
     errorEl.hidden = true;
     state.tasks = res.tasks;
     saveTasks();
-    render();
+    const taskScope = res.task.scope === 'personal' ? 'personal' : 'work';
+    if (taskScope !== state.activeScope) {
+      setActiveScope(taskScope);
+    } else {
+      render();
+    }
     pushTaskToServer(res.task);
-    showToast(`Added "${res.task.title}"`);
+    showToast(`Added "${res.task.title}" (${taskScope === 'personal' ? '👤 Personal' : '💼 Work'})`);
     return true;
   }
 
@@ -477,7 +561,12 @@
     errorEl.hidden = true;
     state.tasks = res.tasks;
     saveTasks();
-    render();
+    const taskScope = res.task.scope === 'personal' ? 'personal' : 'work';
+    if (taskScope !== state.activeScope) {
+      setActiveScope(taskScope);
+    } else {
+      render();
+    }
     pushTaskToServer(res.task);
     showToast(`Updated "${res.task.title}"`);
     return true;
@@ -522,13 +611,14 @@
   }
 
   function handleMoveAllOverdueToDate() {
-    const res = Core.moveAllOverdueToDate(state.tasks, state.selectedDate);
+    const res = Core.moveAllOverdueToDate(state.tasks, state.selectedDate, state.activeScope);
     if (!res.ok || res.movedCount === 0) return;
     state.tasks = res.tasks;
     saveTasks();
     render();
     syncBulkToServer(state.tasks);
-    showToast(`Moved ${res.movedCount} overdue task${res.movedCount === 1 ? '' : 's'} to ${formatDisplayDate(state.selectedDate)}`);
+    const scopeLabel = state.activeScope === 'personal' ? 'personal ' : 'work ';
+    showToast(`Moved ${res.movedCount} overdue ${scopeLabel}task${res.movedCount === 1 ? '' : 's'} to ${formatDisplayDate(state.selectedDate)}`);
   }
 
   function handleToggleTask(id) {
@@ -542,14 +632,15 @@
 
   function handleClearCompleted() {
     const previousTasks = state.tasks.slice();
-    const res = Core.clearCompletedForDate(state.tasks, state.selectedDate);
+    const res = Core.clearCompletedForDate(state.tasks, state.selectedDate, state.activeScope);
     if (res.removedCount === 0) return;
     state.tasks = res.tasks;
     saveTasks();
     render();
     syncBulkToServer(state.tasks);
 
-    showToast(`Cleared ${res.removedCount} completed task${res.removedCount === 1 ? '' : 's'}`, () => {
+    const scopeLabel = state.activeScope === 'personal' ? 'personal ' : 'work ';
+    showToast(`Cleared ${res.removedCount} completed ${scopeLabel}task${res.removedCount === 1 ? '' : 's'}`, () => {
       state.tasks = previousTasks;
       saveTasks();
       render();
@@ -805,6 +896,9 @@
 
   function openAddModal(defaults) {
     const opts = defaults || {};
+    const defaultScope = opts.scope || state.activeScope || 'work';
+    setFormScope('modal', defaultScope);
+
     els.modalTaskId.value = '';
     els.modalHeading.textContent = 'Add Task';
     els.modalSubmitBtn.textContent = 'Add Task';
@@ -812,7 +906,7 @@
     els.modalDateInput.value = opts.date || state.selectedDate;
     els.modalStartInput.value = opts.startTime || '';
     els.modalEndInput.value = opts.endTime || '';
-    els.modalCategoryInput.value = opts.category || 'support';
+    els.modalCategoryInput.value = opts.category || (defaultScope === 'personal' ? 'personal' : 'support');
     els.modalPriorityInput.value = opts.priority || 'medium';
     els.modalNotesInput.value = opts.notes || '';
     els.modalCompletedInput.checked = false;
@@ -828,6 +922,9 @@
   function openEditModal(taskId) {
     const task = state.tasks.find((t) => t.id === taskId);
     if (!task) return;
+
+    const taskScope = task.scope === 'personal' ? 'personal' : 'work';
+    setFormScope('modal', taskScope);
 
     els.modalTaskId.value = task.id;
     els.modalHeading.textContent = 'Edit Task';
@@ -901,6 +998,12 @@
     titleEl.className = 'task-title';
     titleEl.textContent = task.title;
     top.appendChild(titleEl);
+
+    const taskScope = task.scope === 'personal' ? 'personal' : 'work';
+    const scopeTag = document.createElement('span');
+    scopeTag.className = `task-scope-tag scope-${taskScope}`;
+    scopeTag.textContent = taskScope === 'personal' ? '👤 Personal' : '💼 Work';
+    top.appendChild(scopeTag);
 
     const prioBadge = document.createElement('span');
     prioBadge.className = `prio-badge prio-${task.priority}`;
@@ -1030,7 +1133,7 @@
   }
 
   function renderStats() {
-    const stats = Core.computeDailyStats(state.tasks, state.selectedDate);
+    const stats = Core.computeDailyStats(state.tasks, state.selectedDate, state.activeScope);
     els.statPercent.textContent = `${stats.completionRate}%`;
     els.statProgressBar.style.width = `${stats.completionRate}%`;
     els.statCompleted.textContent = `${stats.completed} / ${stats.totalWithOverdue}`;
@@ -1043,18 +1146,22 @@
 
   function renderListView(grouped) {
     const totalVisible = grouped.all.length;
-    const hasAnyForDate = state.tasks.some((t) => t.date === state.selectedDate);
+    const hasAnyForDate = state.tasks.some((t) => {
+      const s = t.scope === 'personal' ? 'personal' : 'work';
+      return t.date === state.selectedDate && s === state.activeScope;
+    });
 
     els.emptyState.hidden = totalVisible > 0;
     if (totalVisible === 0) {
+      const scopeName = state.activeScope === 'personal' ? 'Personal' : 'Work';
       if (hasAnyForDate) {
-        els.emptyStateTitle.textContent = 'No tasks match your filters';
+        els.emptyStateTitle.textContent = `No ${scopeName.toLowerCase()} tasks match your filters`;
         els.emptyStateText.textContent = 'Try clearing search or filter criteria to see your scheduled tasks.';
         els.emptySampleBtn.hidden = true;
       } else {
-        els.emptyStateTitle.textContent = 'No tasks scheduled for this day';
-        els.emptyStateText.textContent = 'Add a task from the panel on the left or click below to plan your day.';
-        els.emptySampleBtn.hidden = false;
+        els.emptyStateTitle.textContent = `No ${scopeName.toLowerCase()} tasks scheduled for this day`;
+        els.emptyStateText.textContent = `Add a ${scopeName.toLowerCase()} task from the panel on the left or click below to plan your day.`;
+        els.emptySampleBtn.hidden = state.activeScope === 'personal';
       }
     }
 
@@ -1265,13 +1372,29 @@
     els.datePicker.value = state.selectedDate;
     els.displayDateLabel.textContent = formatDisplayDate(state.selectedDate);
 
+    // Compute scope counts for header badges
+    const workStats = Core.computeDailyStats(state.tasks, state.selectedDate, 'work');
+    const personalStats = Core.computeDailyStats(state.tasks, state.selectedDate, 'personal');
+    if (els.workCountBadge) els.workCountBadge.textContent = String(workStats.totalWithOverdue);
+    if (els.personalCountBadge) els.personalCountBadge.textContent = String(personalStats.totalWithOverdue);
+
+    // Update active state on header scope switcher buttons
+    if (els.scopeWorkBtn && els.scopePersonalBtn) {
+      els.scopeWorkBtn.classList.toggle('active', state.activeScope === 'work');
+      els.scopePersonalBtn.classList.toggle('active', state.activeScope === 'personal');
+      els.scopeWorkBtn.setAttribute('aria-selected', String(state.activeScope === 'work'));
+      els.scopePersonalBtn.setAttribute('aria-selected', String(state.activeScope === 'personal'));
+    }
+
     const grouped = Core.filterAndSortTasks(state.tasks, {
       date: state.selectedDate,
+      scope: state.activeScope,
       ...state.filters
     });
 
     const count = grouped.all.length;
-    els.visibleCountLabel.textContent = `${count} task${count === 1 ? '' : 's'}`;
+    const scopeLabel = state.activeScope === 'personal' ? 'Personal' : 'Work';
+    els.visibleCountLabel.textContent = `${count} ${scopeLabel} task${count === 1 ? '' : 's'}`;
 
     renderStats();
     renderListView(grouped);
@@ -1295,6 +1418,23 @@
   }
 
   function wireEvents() {
+    // Scope Switcher (Header)
+    if (els.scopeWorkBtn) {
+      els.scopeWorkBtn.addEventListener('click', () => setActiveScope('work'));
+    }
+    if (els.scopePersonalBtn) {
+      els.scopePersonalBtn.addEventListener('click', () => setActiveScope('personal'));
+    }
+
+    // Scope form segmented buttons (Quick Add & Modal)
+    document.querySelectorAll('.scope-form-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.scopeTarget || 'quick';
+        const scope = btn.dataset.scope || 'work';
+        setFormScope(target, scope);
+      });
+    });
+
     // Date navigation
     els.prevDayBtn.addEventListener('click', () => {
       state.selectedDate = Core.shiftDateKey(state.selectedDate, -1);
@@ -1332,6 +1472,7 @@
     // Quick Add form
     els.quickAddForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      const scopeVal = (els.quickScopeInput ? els.quickScopeInput.value : state.activeScope) || 'work';
       const ok = handleAddTask(
         {
           title: els.quickTitle.value,
@@ -1340,7 +1481,8 @@
           endTime: els.quickEnd.value,
           category: els.quickCategory.value,
           priority: els.quickPriority.value,
-          notes: els.quickNotes.value
+          notes: els.quickNotes.value,
+          scope: scopeVal
         },
         els.quickError
       );
@@ -1575,6 +1717,7 @@
     els.modalForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const id = els.modalTaskId.value;
+      const scopeVal = (els.modalScopeInput ? els.modalScopeInput.value : state.activeScope) || 'work';
       const payload = {
         title: els.modalTitleInput.value,
         date: els.modalDateInput.value,
@@ -1583,7 +1726,8 @@
         category: els.modalCategoryInput.value,
         priority: els.modalPriorityInput.value,
         notes: els.modalNotesInput.value,
-        completed: els.modalCompletedInput.checked
+        completed: els.modalCompletedInput.checked,
+        scope: scopeVal
       };
 
       const ok = id
@@ -1641,6 +1785,7 @@
 
       els.templateError.hidden = true;
       const payload = config.build(data, state.selectedDate);
+      payload.scope = 'work';
       const ok = handleAddTask(payload, els.templateError);
       if (ok) {
         closeTemplateModal();

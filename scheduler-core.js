@@ -12,20 +12,24 @@
   'use strict';
 
   const CATEGORIES = Object.freeze({
-    support: { label: 'Store Support / POC', color: '#69be28' },
-    shipping: { label: 'Shipping & Logistics', color: '#059669' },
-    telecom: { label: 'Phone & Telecom', color: '#4f46e5' },
-    hardware: { label: 'Hardware / ATA', color: '#d97706' },
-    supplies: { label: 'Mailed Supplies', color: '#9333ea' },
-    other: { label: 'General / Other', color: '#64748b' }
+    // Work categories
+    support: { label: 'Store Support / POC', color: '#69be28', scope: 'work' },
+    shipping: { label: 'Shipping & Logistics', color: '#059669', scope: 'work' },
+    telecom: { label: 'Phone & Telecom', color: '#4f46e5', scope: 'work' },
+    hardware: { label: 'Hardware / ATA', color: '#d97706', scope: 'work' },
+    supplies: { label: 'Mailed Supplies', color: '#9333ea', scope: 'work' },
+    // Personal categories
+    personal: { label: 'Personal & Family', color: '#ec4899', scope: 'personal' },
+    errands: { label: 'Errands & Shopping', color: '#14b8a6', scope: 'personal' },
+    health: { label: 'Health & Fitness', color: '#10b981', scope: 'personal' },
+    finance: { label: 'Finance & Bills', color: '#eab308', scope: 'personal' },
+    learning: { label: 'Learning & Growth', color: '#3b82f6', scope: 'personal' },
+    // General / Other
+    other: { label: 'General / Other', color: '#64748b', scope: 'all' }
   });
 
   const LEGACY_CATEGORY_MAP = Object.freeze({
-    work: 'support',
-    personal: 'other',
-    health: 'other',
-    learning: 'other',
-    errands: 'shipping'
+    work: 'support'
   });
 
   const TEMPLATE_CONFIGS = Object.freeze({
@@ -394,6 +398,9 @@
       ? src.priority
       : 'medium';
 
+    const rawScope = String(src.scope || '').toLowerCase().trim();
+    const scope = rawScope === 'personal' ? 'personal' : 'work';
+
     const notes = String(src.notes || '').trim().slice(0, 1000);
     const completed = Boolean(src.completed);
 
@@ -411,6 +418,7 @@
         endTime,
         category,
         priority,
+        scope,
         notes,
         completed
       }
@@ -508,14 +516,21 @@
   }
 
   /**
-   * Removes all completed tasks for a specific date.
+   * Removes all completed tasks for a specific date (optionally filtered by scope).
    * @param {Array} tasks
    * @param {string} dateKey
+   * @param {string} [scope]
    * @returns {{ tasks: Array, removedCount: number }}
    */
-  function clearCompletedForDate(tasks, dateKey) {
+  function clearCompletedForDate(tasks, dateKey, scope = '') {
     const list = Array.isArray(tasks) ? tasks : [];
-    const next = list.filter((t) => !(t.date === dateKey && t.completed));
+    const next = list.filter((t) => {
+      if (scope && scope !== 'all') {
+        const taskScope = t.scope === 'personal' ? 'personal' : 'work';
+        if (taskScope !== scope) return true;
+      }
+      return !(t.date === dateKey && t.completed);
+    });
     return {
       tasks: next,
       removedCount: list.length - next.length
@@ -535,16 +550,21 @@
   }
 
   /**
-   * Moves all incomplete tasks from before targetDate to targetDate.
+   * Moves all incomplete tasks from before targetDate to targetDate (optionally filtered by scope).
    * @param {Array} tasks
    * @param {string} targetDate
+   * @param {string} [scope]
    * @returns {{ ok: boolean, tasks: Array, movedCount: number }}
    */
-  function moveAllOverdueToDate(tasks, targetDate) {
+  function moveAllOverdueToDate(tasks, targetDate, scope = '') {
     const list = Array.isArray(tasks) ? tasks : [];
     if (!parseDateKey(targetDate)) return { ok: false, tasks: list, movedCount: 0 };
     let movedCount = 0;
     const next = list.map((task) => {
+      const taskScope = task.scope === 'personal' ? 'personal' : 'work';
+      if (scope && scope !== 'all' && taskScope !== scope) {
+        return task;
+      }
       if (task.date < targetDate && !task.completed) {
         movedCount += 1;
         return {
@@ -581,6 +601,8 @@
         const haystack = `${task.title} ${task.notes || ''}`.toLowerCase();
         if (!haystack.includes(search)) continue;
       }
+      const taskScope = task.scope === 'personal' ? 'personal' : 'work';
+      if (opts.scope && opts.scope !== 'all' && taskScope !== opts.scope) continue;
       if (opts.category && opts.category !== 'all' && task.category !== opts.category) continue;
       if (opts.priority && opts.priority !== 'all' && task.priority !== opts.priority) continue;
       if (opts.status === 'pending' && task.completed) continue;
@@ -687,10 +709,15 @@
    * Computes summary statistics for a given date.
    * @param {Array} tasks
    * @param {string} dateKey
+   * @param {string} [scope] - 'work' | 'personal' | 'all'
    * @returns {{ total: number, completed: number, pending: number, scheduledMinutes: number, completionRate: number }}
    */
-  function computeDailyStats(tasks, dateKey) {
-    const list = Array.isArray(tasks) ? tasks : [];
+  function computeDailyStats(tasks, dateKey, scope = '') {
+    const list = (Array.isArray(tasks) ? tasks : []).filter((t) => {
+      if (!scope || scope === 'all') return true;
+      const s = t.scope === 'personal' ? 'personal' : 'work';
+      return s === scope;
+    });
     const dayTasks = list.filter((t) => t.date === dateKey);
     const overdueTasks = list.filter((t) => t.date < dateKey && !t.completed);
     let completed = 0;
@@ -764,6 +791,7 @@
         category: 'support',
         priority: 'high',
         notes: 'Store: Morrilton\nPOC: Aurora\nStatus: Messaged on whatsapp. Missed Campaign. Scheduled follow-up in 1 hours.',
+        scope: 'work',
         completed: false
       },
       {
@@ -775,6 +803,7 @@
         category: 'shipping',
         priority: 'medium',
         notes: 'Store: Springdale Store\nTicket #: 1Z03G13B0339691067\nItems: AC unit, hardware supplies\nStatus: Shipping label created',
+        scope: 'work',
         completed: false
       },
       {
@@ -786,6 +815,7 @@
         category: 'telecom',
         priority: 'medium',
         notes: 'Store: Quincy Store\nStatus: Inbound and outbound calls verified operational\nTime verified: 8:36 pm',
+        scope: 'work',
         completed: true
       },
       {
@@ -797,6 +827,7 @@
         category: 'hardware',
         priority: 'high',
         notes: 'Store: North Versailles\nHardware: ATA (Analog Telephone Adapter)\nSymptoms: Keeps malfunctioning\nAction: Sent in group along with MAC',
+        scope: 'work',
         completed: false
       },
       {
@@ -808,6 +839,7 @@
         category: 'supplies',
         priority: 'medium',
         notes: 'Store: Huntington\nIssue: Printer Roller Issue\nSupplies: Mailed to Supplies\nStatus: Mailed',
+        scope: 'work',
         completed: false
       }
     ];
@@ -864,6 +896,7 @@
       const prioConfig = PRIORITIES[t.priority] || PRIORITIES.medium;
       return {
         'Date': t.date,
+        'Section': t.scope === 'personal' ? 'Personal' : 'Work',
         'Start Time': t.startTime ? formatTime12h(t.startTime) : 'Anytime',
         'End Time': t.endTime ? formatTime12h(t.endTime) : '',
         'Task Title': t.title,
@@ -977,7 +1010,7 @@
    * @param {string} defaultDate
    * @returns {{ tasks: Array<Object>, importedCount: number, errors: Array<string> }}
    */
-  function parseSpreadsheetRows(rows, existingTasks = [], defaultDate = '') {
+  function parseSpreadsheetRows(rows, existingTasks = [], defaultDate = '', defaultScope = 'work') {
     const list = Array.isArray(rows) ? rows : [];
     const baseDate = defaultDate || formatDateKey(new Date());
     let currentTasks = Array.isArray(existingTasks) ? existingTasks.slice() : [];
@@ -1005,6 +1038,8 @@
       const category = normalizeImportCategory(r['Category'] || r['category']);
       const priority = normalizeImportPriority(r['Priority'] || r['priority']);
       const completed = normalizeImportStatus(r['Status'] || r['status'] || r['completed'] || r['Completed']);
+      const rawScope = String(r['Scope'] || r['scope'] || r['Section'] || r['section'] || defaultScope || 'work').toLowerCase();
+      const scope = rawScope.includes('personal') ? 'personal' : 'work';
       const notes = String(
         r['Notes / Details'] || r['Notes'] || r['notes'] || r['Details'] || r['details'] || ''
       ).trim();
@@ -1016,6 +1051,7 @@
         endTime,
         category,
         priority,
+        scope,
         completed,
         notes
       };
