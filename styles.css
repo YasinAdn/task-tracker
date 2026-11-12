@@ -1,13 +1,13 @@
 :root,
 [data-theme="dark"] {
-  --bg: #0e1014;
-  --surface: rgba(20, 22, 27, 0.94);
-  --surface-solid: #16181e;
-  --surface-muted: #1e2129;
-  --surface-elevated: #262a34;
-  --card-bg: #181b21;
-  --card-bg-completed: #14171c;
-  --notes-bg: #111318;
+  --bg: #08090c;
+  --surface: rgba(18, 20, 25, 0.88);
+  --surface-solid: #15171d;
+  --surface-muted: #1b1e25;
+  --surface-elevated: #232730;
+  --card-bg: #171a20;
+  --card-bg-completed: #13151a;
+  --notes-bg: #101217;
   --border: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.2);
   --text: #f3f5f8;
@@ -103,11 +103,11 @@ body {
   -webkit-font-smoothing: antialiased;
   background-color: var(--bg);
   background-image:
-    radial-gradient(ellipse at 50% 0%, rgba(105, 190, 40, 0.11) 0%, transparent 60%),
-    linear-gradient(180deg, rgba(14, 16, 20, 0.84) 0%, rgba(14, 16, 20, 0.94) 100%),
+    radial-gradient(ellipse 90% 45% at 50% -8%, rgba(105, 190, 40, 0.16) 0%, transparent 65%),
+    radial-gradient(circle at 50% 45%, transparent 45%, rgba(0, 0, 0, 0.42) 100%),
     url("assets/carbon-fiber.svg");
-  background-size: auto, auto, 32px 32px;
-  background-position: center top, center top, 0 0;
+  background-size: auto, auto, 24px 24px;
+  background-position: center top, center center, 0 0;
   background-repeat: no-repeat, no-repeat, repeat;
   background-attachment: fixed;
 }
@@ -2250,12 +2250,12 @@ body.compact-density .task-actions .move-today-btn {
   z-index: 1000;
   background-color: var(--bg);
   background-image:
-    radial-gradient(circle at 50% 25%, rgba(105, 190, 40, 0.14) 0%, transparent 55%),
-    linear-gradient(180deg, rgba(14, 16, 20, 0.84), rgba(14, 16, 20, 0.94)),
+    radial-gradient(circle at 50% 25%, rgba(105, 190, 40, 0.18) 0%, transparent 55%),
+    radial-gradient(circle at 50% 50%, transparent 35%, rgba(0, 0, 0, 0.55) 100%),
     url("assets/carbon-fiber.svg");
-  background-size: auto, auto, 28px 28px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background-size: auto, auto, 24px 24px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
   padding: 20px;

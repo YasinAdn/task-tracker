@@ -1,71 +1,93 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <defs>
-    <!-- Warp bundle: glossy 45-degree diagonal fiber sheen -->
-    <linearGradient id="warpGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#141414"/>
-      <stop offset="25%" stop-color="#262626"/>
-      <stop offset="50%" stop-color="#4a4a4a"/>
-      <stop offset="75%" stop-color="#2a2a2a"/>
-      <stop offset="100%" stop-color="#121212"/>
+    <!-- Horizontal carbon tow: glossy cylindrical dome lit from top-left + subtle steel-graphite sheen -->
+    <linearGradient id="horizDome" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#07080a"/>
+      <stop offset="16%" stop-color="#191c21"/>
+      <stop offset="38%" stop-color="#4e545e"/>
+      <stop offset="52%" stop-color="#3c424c"/>
+      <stop offset="82%" stop-color="#15181d"/>
+      <stop offset="100%" stop-color="#060709"/>
     </linearGradient>
 
-    <!-- Weft bundle: dark cross-grain fiber sheen -->
-    <linearGradient id="weftGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0a0a0a"/>
-      <stop offset="30%" stop-color="#181818"/>
-      <stop offset="55%" stop-color="#2c2c2c"/>
-      <stop offset="80%" stop-color="#1a1a1a"/>
-      <stop offset="100%" stop-color="#0d0d0d"/>
+    <!-- Vertical carbon tow: darker cross-lit cylindrical dome for 3D anisotropy -->
+    <linearGradient id="vertDome" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#050608"/>
+      <stop offset="18%" stop-color="#131519"/>
+      <stop offset="40%" stop-color="#333841"/>
+      <stop offset="56%" stop-color="#262a31"/>
+      <stop offset="84%" stop-color="#111317"/>
+      <stop offset="100%" stop-color="#050608"/>
     </linearGradient>
 
-    <!-- Micro-fiber texture lines for 3D realism -->
-    <pattern id="warpLines" width="2" height="2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <line x1="0" y1="0" x2="0" y2="2" stroke="#ffffff" stroke-opacity="0.12" stroke-width="0.5"/>
-      <line x1="1" y1="0" x2="1" y2="2" stroke="#000000" stroke-opacity="0.45" stroke-width="0.5"/>
+    <!-- Tuck shadow where a tow dips under an adjacent perpendicular bundle -->
+    <linearGradient id="tuckLR" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.72"/>
+      <stop offset="28%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="72%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.72"/>
+    </linearGradient>
+
+    <linearGradient id="tuckTB" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.76"/>
+      <stop offset="28%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="72%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.76"/>
+    </linearGradient>
+
+    <!-- Fine parallel monofilament strands inside each tow -->
+    <pattern id="horizStrands" width="8" height="2" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0.4" x2="8" y2="0.4" stroke="#ffffff" stroke-opacity="0.11" stroke-width="0.45"/>
+      <line x1="0" y1="1.3" x2="8" y2="1.3" stroke="#000000" stroke-opacity="0.38" stroke-width="0.45"/>
     </pattern>
 
-    <pattern id="weftLines" width="2" height="2" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
-      <line x1="0" y1="0" x2="2" y2="0" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.5"/>
-      <line x1="0" y1="1" x2="2" y2="1" stroke="#000000" stroke-opacity="0.5" stroke-width="0.5"/>
+    <pattern id="vertStrands" width="2" height="8" patternUnits="userSpaceOnUse">
+      <line x1="0.4" y1="0" x2="0.4" y2="8" stroke="#ffffff" stroke-opacity="0.09" stroke-width="0.45"/>
+      <line x1="1.3" y1="0" x2="1.3" y2="8" stroke="#000000" stroke-opacity="0.42" stroke-width="0.45"/>
     </pattern>
 
-    <g id="warpCell">
-      <rect width="8" height="8" rx="0.75" fill="url(#warpGrad)"/>
-      <rect width="8" height="8" rx="0.75" fill="url(#warpLines)"/>
-      <rect x="0.5" y="0.5" width="7" height="7" rx="0.5" fill="none" stroke="#000000" stroke-width="0.6" stroke-opacity="0.7"/>
+    <g id="hTow">
+      <rect x="0.25" y="0.25" width="7.5" height="7.5" rx="0.8" fill="url(#horizDome)"/>
+      <rect x="0.25" y="0.25" width="7.5" height="7.5" rx="0.8" fill="url(#horizStrands)"/>
+      <rect x="0.25" y="0.25" width="7.5" height="7.5" rx="0.8" fill="url(#tuckLR)"/>
+      <!-- Crisp resin edge glint -->
+      <line x1="1" y1="2.3" x2="7" y2="2.3" stroke="#ffffff" stroke-opacity="0.14" stroke-width="0.5"/>
     </g>
 
-    <g id="weftCell">
-      <rect width="8" height="8" rx="0.75" fill="url(#weftGrad)"/>
-      <rect width="8" height="8" rx="0.75" fill="url(#weftLines)"/>
-      <rect x="0.5" y="0.5" width="7" height="7" rx="0.5" fill="none" stroke="#000000" stroke-width="0.6" stroke-opacity="0.85"/>
+    <g id="vTow">
+      <rect x="0.25" y="0.25" width="7.5" height="7.5" rx="0.8" fill="url(#vertDome)"/>
+      <rect x="0.25" y="0.25" width="7.5" height="7.5" rx="0.8" fill="url(#vertStrands)"/>
+      <rect x="0.25" y="0.25" width="7.5" height="7.5" rx="0.8" fill="url(#tuckTB)"/>
+      <!-- Subtle vertical glint -->
+      <line x1="2.4" y1="1" x2="2.4" y2="7" stroke="#ffffff" stroke-opacity="0.09" stroke-width="0.5"/>
     </g>
   </defs>
 
-  <!-- Deep carbon base #262626 / #0d0d0d -->
-  <rect width="32" height="32" fill="#0d0d0d"/>
+  <!-- Deep inter-tow gap shadow -->
+  <rect width="32" height="32" fill="#040507"/>
 
-  <!-- Row 0: Warp, Warp, Weft, Weft -->
-  <use href="#warpCell" x="0" y="0"/>
-  <use href="#warpCell" x="8" y="0"/>
-  <use href="#weftCell" x="16" y="0"/>
-  <use href="#weftCell" x="24" y="0"/>
+  <!-- True 2x2 Twill Weave Matrix -->
+  <!-- Row 0: H, H, V, V -->
+  <use href="#hTow" x="0" y="0"/>
+  <use href="#hTow" x="8" y="0"/>
+  <use href="#vTow" x="16" y="0"/>
+  <use href="#vTow" x="24" y="0"/>
 
-  <!-- Row 1: Weft, Warp, Warp, Weft (Shifted right by 1 -> 45-degree twill) -->
-  <use href="#weftCell" x="0" y="8"/>
-  <use href="#warpCell" x="8" y="8"/>
-  <use href="#warpCell" x="16" y="8"/>
-  <use href="#weftCell" x="24" y="8"/>
+  <!-- Row 1: V, H, H, V -->
+  <use href="#vTow" x="0" y="8"/>
+  <use href="#hTow" x="8" y="8"/>
+  <use href="#hTow" x="16" y="8"/>
+  <use href="#vTow" x="24" y="8"/>
 
-  <!-- Row 2: Weft, Weft, Warp, Warp -->
-  <use href="#weftCell" x="0" y="16"/>
-  <use href="#weftCell" x="8" y="16"/>
-  <use href="#warpCell" x="16" y="16"/>
-  <use href="#warpCell" x="24" y="16"/>
+  <!-- Row 2: V, V, H, H -->
+  <use href="#vTow" x="0" y="16"/>
+  <use href="#vTow" x="8" y="16"/>
+  <use href="#hTow" x="16" y="16"/>
+  <use href="#hTow" x="24" y="16"/>
 
-  <!-- Row 3: Warp, Weft, Weft, Warp -->
-  <use href="#warpCell" x="0" y="24"/>
-  <use href="#weftCell" x="8" y="24"/>
-  <use href="#weftCell" x="16" y="24"/>
-  <use href="#warpCell" x="24" y="24"/>
+  <!-- Row 3: H, V, V, H -->
+  <use href="#hTow" x="0" y="24"/>
+  <use href="#vTow" x="8" y="24"/>
+  <use href="#vTow" x="16" y="24"/>
+  <use href="#hTow" x="24" y="24"/>
 </svg>
