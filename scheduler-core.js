@@ -80,29 +80,48 @@
       description: 'Log an outreach to a store POC with an automatic follow-up timer.',
       fields: [
         { key: 'store', label: 'Store Name or #', type: 'text', placeholder: 'e.g. Store #104 or Springdale Store', required: true },
-        { key: 'poc', label: 'POC Name / Title', type: 'text', placeholder: 'e.g. Store Manager', defaultValue: 'Store Manager', required: false },
-        { key: 'hours', label: 'Check back in (hours)', type: 'select', defaultValue: '2', options: ['1', '2', '3', '4'], required: true },
+        { key: 'poc', label: 'POC Name / Title', type: 'text', placeholder: 'e.g. Aurora or Store Manager', defaultValue: 'Store Manager', required: false },
+        { key: 'followup', label: 'Check back in', type: 'select', defaultValue: '15m', options: ['15m', '30m', '1h', '2h', '3h', '4h'], required: true },
         { key: 'details', label: 'Call Outcome / Notes', type: 'text', defaultValue: 'No response on initial call', required: false }
       ],
       build(data, dateKey) {
         const store = String(data.store || '').trim();
         const poc = String(data.poc || 'Store Manager').trim();
-        const hours = Number(data.hours) || 2;
-        const details = String(data.details || 'No response on initial call').trim();
+        const followupStr = String(data.followup || data.hours || '15m').toLowerCase().trim();
+        let followupMinutes = 15;
+        if (followupStr.includes('30m') || followupStr === '30' || followupStr === '0.5') {
+          followupMinutes = 30;
+        } else if (followupStr.includes('15m') || followupStr === '15' || followupStr === '0.25') {
+          followupMinutes = 15;
+        } else if (followupStr.includes('1h') || followupStr === '1') {
+          followupMinutes = 60;
+        } else if (followupStr.includes('2h') || followupStr === '2') {
+          followupMinutes = 120;
+        } else if (followupStr.includes('3h') || followupStr === '3') {
+          followupMinutes = 180;
+        } else if (followupStr.includes('4h') || followupStr === '4') {
+          followupMinutes = 240;
+        }
 
+        const details = String(data.details || 'No response on initial call').trim();
         const now = new Date();
         const nowMins = now.getHours() * 60 + now.getMinutes();
-        const startMins = Math.min(MAX_DAY_MINUTES - 15, Math.ceil((nowMins + hours * 60) / 15) * 15);
-        const endMins = Math.min(MAX_DAY_MINUTES, startMins + 30);
+        const startMins = nowMins;
+        const endMins = Math.min(MAX_DAY_MINUTES, startMins + followupMinutes);
+
+        const durationLabel = followupMinutes < 60 ? `${followupMinutes} mins` : `${followupMinutes / 60} hours`;
+        const remindAt = new Date(now.getTime() + followupMinutes * 60000).toISOString();
 
         return {
-          title: `Contacted POC at ${store}, no response — will check back in ${hours} hours`,
+          title: `Contacted POC at ${store}, no response — will check back in ${durationLabel}`,
           date: dateKey || formatDateKey(new Date()),
           startTime: minutesToTime(startMins),
           endTime: minutesToTime(endMins),
           category: 'support',
           priority: 'high',
-          notes: `Store: ${store}\nPOC: ${poc}\nStatus: ${details}. Scheduled follow-up in ${hours} hours.`,
+          notes: `Store: ${store}\nPOC: ${poc}\nStatus: ${details}. Scheduled follow-up in ${durationLabel}.`,
+          remindAt,
+          notifiedAt: '',
           completed: false
         };
       }
@@ -113,8 +132,8 @@
       icon: '☎️',
       description: 'Confirm phone lines and inbound/outbound calls are working.',
       fields: [
-        { key: 'store', label: 'Store Name or #', type: 'text', placeholder: 'e.g. Springdale Store', required: true },
-        { key: 'timeStr', label: 'Time Verified', type: 'text', placeholder: 'Leave blank to use current time', required: false },
+        { key: 'store', label: 'Store Name or #', type: 'text', placeholder: 'e.g. Springdale Store or Quincy', required: true },
+        { key: 'timeStr', label: 'Time Verified', type: 'text', placeholder: 'Leave blank to auto-detect current time', required: false },
         { key: 'details', label: 'Verification Details', type: 'text', defaultValue: 'Inbound and outbound calls verified operational', required: false }
       ],
       build(data, dateKey) {
@@ -124,7 +143,7 @@
         const timeStr = String(data.timeStr || '').trim() || formatTime12h(minutesToTime(nowMins));
         const details = String(data.details || 'Inbound and outbound calls verified operational').trim();
 
-        const startMins = Math.min(MAX_DAY_MINUTES - 15, Math.floor(nowMins / 15) * 15);
+        const startMins = nowMins;
         const endMins = Math.min(MAX_DAY_MINUTES, startMins + 15);
 
         return {
@@ -156,7 +175,7 @@
 
         const now = new Date();
         const nowMins = now.getHours() * 60 + now.getMinutes();
-        const startMins = Math.min(MAX_DAY_MINUTES - 15, Math.floor(nowMins / 15) * 15);
+        const startMins = nowMins;
         const endMins = Math.min(MAX_DAY_MINUTES, startMins + 30);
 
         return {
@@ -324,6 +343,25 @@
     if (hrs === 0) return `${mins}m`;
     if (mins === 0) return `${hrs}h`;
     return `${hrs}h ${mins}m`;
+  }
+
+  /**
+   * Auto-detects the current device / operating system time across all platforms (PC, Phone, Mac, etc.).
+   * @param {Date} [refDate]
+   * @returns {{ time: string, time12: string, hours: number, minutes: number, dateKey: string }}
+   */
+  function getCurrentDeviceTime(refDate) {
+    const d = refDate instanceof Date ? refDate : new Date();
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    return {
+      time,
+      time12: formatTime12h(time),
+      hours: h,
+      minutes: m,
+      dateKey: formatDateKey(d)
+    };
   }
 
   /**
@@ -1212,6 +1250,7 @@
     minutesToTime,
     formatTime12h,
     formatDuration,
+    getCurrentDeviceTime,
     validateTaskInput,
     addTask,
     updateTask,

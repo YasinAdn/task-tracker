@@ -189,7 +189,10 @@
 
             <div class="field-row">
               <div class="field">
-                <label for="quickStart">Start</label>
+                <div class="field-label-row">
+                  <label for="quickStart">Start</label>
+                  <button type="button" class="now-pill-btn" id="quickSetNowBtn" title="Detect and set to current device time">⏱️ Now</button>
+                </div>
                 <input type="time" id="quickStart" />
               </div>
               <div class="field">
@@ -449,7 +452,10 @@
             <input type="date" id="modalDateInput" required />
           </div>
           <div class="field">
-            <label for="modalStartInput">Start time</label>
+            <div class="field-label-row">
+              <label for="modalStartInput">Start time</label>
+              <button type="button" class="now-pill-btn" id="modalSetNowBtn" title="Detect and set to current device time">⏱️ Now</button>
+            </div>
             <input type="time" id="modalStartInput" />
           </div>
           <div class="field">
@@ -697,6 +703,14 @@
       </form>
     </div>
   </div>
+
+  <!-- Mobile Floating Add Button -->
+  <button type="button" class="mobile-add-fab" id="mobileAddFab" aria-label="Add new task" title="Add new task">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"></line>
+      <line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+  </button>
 
   <!-- Toast Container -->
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>

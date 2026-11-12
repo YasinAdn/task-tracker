@@ -40,6 +40,7 @@
     datePicker: document.getElementById('datePicker'),
     searchInput: document.getElementById('searchInput'),
     openAddModalBtn: document.getElementById('openAddModalBtn'),
+    mobileAddFab: document.getElementById('mobileAddFab'),
     topbarExportBtn: document.getElementById('topbarExportBtn'),
     themeToggleBtn: document.getElementById('themeToggleBtn'),
     themeIconSun: document.getElementById('themeIconSun'),
@@ -70,6 +71,7 @@
     quickScopeInput: document.getElementById('quickScope'),
     quickTitle: document.getElementById('quickTitle'),
     quickStart: document.getElementById('quickStart'),
+    quickSetNowBtn: document.getElementById('quickSetNowBtn'),
     quickEnd: document.getElementById('quickEnd'),
     quickCategory: document.getElementById('quickCategory'),
     quickPriority: document.getElementById('quickPriority'),
@@ -138,6 +140,7 @@
     modalTitleInput: document.getElementById('modalTitleInput'),
     modalDateInput: document.getElementById('modalDateInput'),
     modalStartInput: document.getElementById('modalStartInput'),
+    modalSetNowBtn: document.getElementById('modalSetNowBtn'),
     modalEndInput: document.getElementById('modalEndInput'),
     modalCategoryInput: document.getElementById('modalCategoryInput'),
     modalPriorityInput: document.getElementById('modalPriorityInput'),
@@ -498,17 +501,24 @@
       return;
     }
 
+    const dev = Core.getCurrentDeviceTime();
     let startMins = Core.timeToMinutes(startInput.value);
     if (startMins === null) {
-      const now = new Date();
-      // Round up to next 30-minute boundary for convenience
-      const total = now.getHours() * 60 + now.getMinutes();
-      startMins = Math.min(23 * 60, Math.ceil(total / 30) * 30);
-      startInput.value = Core.minutesToTime(startMins);
+      startMins = dev.hours * 60 + dev.minutes;
+      startInput.value = dev.time;
     }
 
     const endMins = Math.min(23 * 60 + 59, startMins + durationMinutes);
     endInput.value = Core.minutesToTime(endMins);
+  }
+
+  function setFormTimeToNow(startInput, endInput, defaultDurationMinutes = 30) {
+    const dev = Core.getCurrentDeviceTime();
+    if (startInput) startInput.value = dev.time;
+    if (endInput) {
+      const endMins = Math.min(23 * 60 + 59, dev.hours * 60 + dev.minutes + defaultDurationMinutes);
+      endInput.value = Core.minutesToTime(endMins);
+    }
   }
 
   /* -------------------- Notifications -------------------- */
@@ -1079,13 +1089,24 @@
     const defaultScope = opts.scope || state.activeScope || 'work';
     setFormScope('modal', defaultScope);
 
+    // Auto-detect current device time across PC, Phone, Mac, etc.
+    const dev = Core.getCurrentDeviceTime();
+    const startTime = opts.startTime !== undefined ? opts.startTime : dev.time;
+    let endTime = opts.endTime || '';
+    if (!endTime && startTime) {
+      const startMins = Core.timeToMinutes(startTime);
+      if (startMins !== null) {
+        endTime = Core.minutesToTime(Math.min(23 * 60 + 59, startMins + 30));
+      }
+    }
+
     els.modalTaskId.value = '';
     els.modalHeading.textContent = 'Add Task';
     els.modalSubmitBtn.textContent = 'Add Task';
     els.modalTitleInput.value = opts.title || '';
-    els.modalDateInput.value = opts.date || state.selectedDate;
-    els.modalStartInput.value = opts.startTime || '';
-    els.modalEndInput.value = opts.endTime || '';
+    els.modalDateInput.value = opts.date || state.selectedDate || dev.dateKey;
+    els.modalStartInput.value = startTime;
+    els.modalEndInput.value = endTime;
     els.modalCategoryInput.value = opts.category || (defaultScope === 'personal' ? 'personal' : 'support');
     els.modalPriorityInput.value = opts.priority || 'medium';
     els.modalNotesInput.value = opts.notes || '';
@@ -1705,12 +1726,32 @@
       );
       if (ok) {
         els.quickTitle.value = '';
-        els.quickStart.value = '';
-        els.quickEnd.value = '';
+        setFormTimeToNow(els.quickStart, els.quickEnd, 30);
         els.quickNotes.value = '';
         els.quickTitle.focus();
       }
     });
+
+    // Auto-detect current device time buttons (Now)
+    if (els.quickSetNowBtn) {
+      els.quickSetNowBtn.addEventListener('click', () => {
+        setFormTimeToNow(els.quickStart, els.quickEnd, 30);
+      });
+    }
+
+    if (els.modalSetNowBtn) {
+      els.modalSetNowBtn.addEventListener('click', () => {
+        setFormTimeToNow(els.modalStartInput, els.modalEndInput, 30);
+      });
+    }
+
+    // Mobile Floating Add Button
+    if (els.mobileAddFab) {
+      els.mobileAddFab.addEventListener('click', () => openAddModal());
+    }
+
+    // Prime quick form with current device time
+    setFormTimeToNow(els.quickStart, els.quickEnd, 30);
 
     // Operational task templates (opens interactive questionnaire modal)
     document.querySelectorAll('.template-btn').forEach((btn) => {
