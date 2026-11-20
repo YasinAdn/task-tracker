@@ -50,9 +50,10 @@
         const items = String(data.items || '').trim();
         const status = String(data.status || 'Shipping label created').trim();
 
-        const title = items
-          ? `Shipping ticket ${ticket} made for ${store} (items: ${items})`
-          : `Shipping ticket ${ticket} made for ${store}`;
+        const hasTicket = ticket && ticket !== '0' && ticket.toUpperCase() !== 'N/A';
+        const title = hasTicket
+          ? `${store} Shipping label ${ticket} Made`
+          : `${store} Shipping label Made`;
 
         const notes = [
           `Ticket #: ${ticket}`,
@@ -113,7 +114,7 @@
         const remindAt = new Date(now.getTime() + followupMinutes * 60000).toISOString();
 
         return {
-          title: `Contacted POC at ${store}, no response — will check back in ${durationLabel}`,
+          title: `${store} — Contacted POC, no response — will check back in ${durationLabel}`,
           date: dateKey || formatDateKey(new Date()),
           startTime: minutesToTime(startMins),
           endTime: minutesToTime(endMins),
@@ -147,7 +148,7 @@
         const endMins = Math.min(MAX_DAY_MINUTES, startMins + 15);
 
         return {
-          title: `Phone lines at ${store} are up at ${timeStr}`,
+          title: `${store} — Phone lines up at ${timeStr}`,
           date: dateKey || formatDateKey(new Date()),
           startTime: minutesToTime(startMins),
           endTime: minutesToTime(endMins),
@@ -179,7 +180,7 @@
         const endMins = Math.min(MAX_DAY_MINUTES, startMins + 30);
 
         return {
-          title: `ATA Device issue at ${store} — ${escalation}`,
+          title: `${store} — ATA Device issue — ${escalation}`,
           date: dateKey || formatDateKey(new Date()),
           startTime: minutesToTime(startMins),
           endTime: minutesToTime(endMins),
@@ -208,7 +209,7 @@
         const status = String(data.status || 'Packed and mailed').trim();
 
         return {
-          title: `Mailed supplies for ${store} for ${issue}`,
+          title: `${store} — Mailed supplies for ${issue}`,
           date: dateKey || formatDateKey(new Date()),
           startTime: '',
           endTime: '',
@@ -1409,6 +1410,87 @@
     };
   }
 
+  function extractStoreFromNotes(notes) {
+    if (!notes) return '';
+    const match = /^Store:\s*(.+)$/im.exec(String(notes));
+    return match ? match[1].trim() : '';
+  }
+
+  /**
+   * Formats task titles so the store name leads at the beginning
+   * (e.g., "31st Street Shipping label 1ZV951410393582002 Made").
+   * @param {Object} task
+   * @returns {string}
+   */
+  function formatDisplayTitle(task) {
+    if (!task) return '';
+    const title = String(task.title || '').trim();
+    if (!title) return '';
+    const storeFromNotes = extractStoreFromNotes(task.notes);
+
+    // Shipping ticket: "Shipping ticket <TICKET> made for <STORE> (items: ...)" -> "<STORE> Shipping label <TICKET> Made"
+    const shipMatch = /^Shipping\s+ticket\s+(.+?)\s+made\s+for\s+(.+?)(?:\s*\(items:\s*(.+?)\))?$/i.exec(title);
+    if (shipMatch) {
+      const ticketRaw = shipMatch[1].trim();
+      const storeRaw = storeFromNotes || shipMatch[2].trim();
+      const hasTicket = ticketRaw && ticketRaw !== '0' && ticketRaw.toUpperCase() !== 'N/A';
+      return hasTicket
+        ? `${storeRaw} Shipping label ${ticketRaw} Made`
+        : `${storeRaw} Shipping label Made`;
+    }
+
+    // Already formatted store shipping label title with "(items: ...)" suffix -> keep concise
+    const alreadyShipMatch = /^(.+?)\s+Shipping\s+label\s+(.+?)\s+Made(?:\s*\(items:.*\))?$/i.exec(title);
+    if (alreadyShipMatch) {
+      return `${alreadyShipMatch[1].trim()} Shipping label ${alreadyShipMatch[2].trim()} Made`;
+    }
+
+    // Contacted POC: "Contacted POC at <STORE>, ..." -> "<STORE> — Contacted POC, ..."
+    const pocMatch = /^Contacted\s+POC\s+at\s+([^,—-]+?)([,—-].*)$/i.exec(title);
+    if (pocMatch) {
+      const storeRaw = storeFromNotes || pocMatch[1].trim();
+      return `${storeRaw} — Contacted POC${pocMatch[2].trim()}`;
+    }
+
+    // Phone lines: "Phone lines at <STORE> are up at ..." -> "<STORE> — Phone lines up at ..."
+    const phoneMatch = /^Phone\s+lines\s+at\s+(.+?)\s+(?:are\s+)?up\s*(.*)$/i.exec(title);
+    if (phoneMatch) {
+      const storeRaw = storeFromNotes || phoneMatch[1].trim();
+      const tail = phoneMatch[2].trim();
+      return `${storeRaw} — Phone lines up${tail ? ' ' + tail : ''}`;
+    }
+
+    // ATA Device: "ATA Device issue at <STORE> — ..." -> "<STORE> — ATA Device issue — ..."
+    const ataMatch = /^ATA\s+Device\s+issue\s+at\s+([^—-]+?)(?:\s*[—-]\s*(.*))?$/i.exec(title);
+    if (ataMatch) {
+      const storeRaw = storeFromNotes || ataMatch[1].trim();
+      const tail = ataMatch[2] ? ataMatch[2].trim() : '';
+      return tail ? `${storeRaw} — ATA Device issue — ${tail}` : `${storeRaw} — ATA Device issue`;
+    }
+
+    // Mailed supplies: "Mailed supplies for <STORE> for <ISSUE>" -> "<STORE> — Mailed supplies for <ISSUE>"
+    const supMatch = /^Mailed\s+supplies\s+for\s+(.+?)\s+for\s+(.+)$/i.exec(title);
+    if (supMatch) {
+      const storeRaw = storeFromNotes || supMatch[1].trim();
+      return `${storeRaw} — Mailed supplies for ${supMatch[2].trim()}`;
+    }
+
+    // Fallback when notes specify Store: <StoreName> and title doesn't start with it
+    if (storeFromNotes) {
+      const lowerTitle = title.toLowerCase();
+      const lowerStore = storeFromNotes.toLowerCase();
+      if (!lowerTitle.startsWith(lowerStore)) {
+        const escapedStore = storeFromNotes.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const cleaned = title
+          .replace(new RegExp(`\\s+(?:at|for)\\s+${escapedStore}\\b`, 'i'), '')
+          .trim();
+        return `${storeFromNotes} — ${cleaned || title}`;
+      }
+    }
+
+    return title;
+  }
+
   return {
     CATEGORIES,
     PRIORITIES,
@@ -1447,6 +1529,7 @@
     parseSpreadsheetRows,
     normalizeImportDate,
     normalizeImportTime,
+    formatDisplayTitle,
     mergeTaskState
   };
 });

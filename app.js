@@ -720,7 +720,8 @@
 
         const prio = Core.PRIORITIES[task.priority] || Core.PRIORITIES.medium;
         const isWork = task.scope !== 'personal';
-        const highlightedTitle = highlightSearchMatches(task.title, q);
+        const displayTitle = Core.formatDisplayTitle ? Core.formatDisplayTitle(task) : task.title;
+        const highlightedTitle = highlightSearchMatches(displayTitle, q);
         const snippet = extractSearchSnippet(task.notes, q);
 
         item.innerHTML = `
@@ -907,12 +908,13 @@
     activeAlertTaskId = task.id;
 
     // Play chime sound
+    const displayTitle = Core.formatDisplayTitle ? Core.formatDisplayTitle(task) : task.title;
     playNotificationChime();
 
     // Show native desktop notification
     if (getNotificationPermission() === 'granted') {
       try {
-        const notif = new Notification(`⏰ Follow-up Due: ${task.title}`, {
+        const notif = new Notification(`⏰ Follow-up Due: ${displayTitle}`, {
           body: task.notes ? task.notes.replace(/\n/g, ' • ') : 'Your scheduled follow-up time has been reached.',
           icon: '/favicon.ico',
           tag: `task-${task.id}`
@@ -926,7 +928,7 @@
 
     // Display In-App Floating Alert Banner
     if (els.followupAlertBanner) {
-      els.followupAlertTitle.textContent = task.title;
+      els.followupAlertTitle.textContent = displayTitle;
       els.followupAlertScope.textContent = task.scope === 'personal' ? '👤 Personal' : '💼 Work';
       const detailText = task.notes ? task.notes.split('\n')[0] : 'Follow-up time reached.';
       els.followupAlertDetails.textContent = detailText;
@@ -1740,14 +1742,15 @@
     const summaryTop = document.createElement('div');
     summaryTop.className = 'fc-summary-top';
 
+    const displayTitle = Core.formatDisplayTitle ? Core.formatDisplayTitle(task) : task.title;
     const titleWrap = document.createElement('div');
     titleWrap.className = 'fc-title-wrap';
     const titleEl = document.createElement('h4');
     titleEl.className = 'task-title';
     if (state.filters.search) {
-      titleEl.innerHTML = highlightSearchMatches(task.title, state.filters.search);
+      titleEl.innerHTML = highlightSearchMatches(displayTitle, state.filters.search);
     } else {
-      titleEl.textContent = task.title;
+      titleEl.textContent = displayTitle;
     }
     titleWrap.appendChild(titleEl);
     summaryTop.appendChild(titleWrap);
@@ -1876,9 +1879,9 @@
     const openTitle = document.createElement('h4');
     openTitle.className = 'fc-open-title';
     if (state.filters.search) {
-      openTitle.innerHTML = highlightSearchMatches(task.title, state.filters.search);
+      openTitle.innerHTML = highlightSearchMatches(displayTitle, state.filters.search);
     } else {
-      openTitle.textContent = task.title;
+      openTitle.textContent = displayTitle;
     }
     const openSub = document.createElement('span');
     openSub.className = 'fc-open-sub';
@@ -2169,7 +2172,8 @@
         const titleSpan = document.createElement('span');
         titleSpan.className = 'anytime-chip-title';
         const prefix = task.date < state.selectedDate ? `[${formatShortDate(task.date)}] ` : '';
-        titleSpan.textContent = prefix + task.title;
+        const chipTitle = Core.formatDisplayTitle ? Core.formatDisplayTitle(task) : task.title;
+        titleSpan.textContent = prefix + chipTitle;
         titleSpan.addEventListener('click', () => openEditModal(task.id));
 
         chip.appendChild(cb);
@@ -2265,7 +2269,7 @@
 
       const title = document.createElement('span');
       title.className = 'timeline-block-title';
-      title.textContent = task.title;
+      title.textContent = Core.formatDisplayTitle ? Core.formatDisplayTitle(task) : task.title;
 
       main.appendChild(cb);
       main.appendChild(title);

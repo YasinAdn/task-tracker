@@ -312,7 +312,7 @@ test('TEMPLATE_CONFIGS builds clean tasks from real user inputs without dummy pl
     status: 'Label created'
   }, '2026-11-12');
 
-  assert.equal(shipTask.title, 'Shipping ticket 1Z03G13B0339691067 made for Springdale Store (items: AC unit, filters)');
+  assert.equal(shipTask.title, 'Springdale Store Shipping label 1Z03G13B0339691067 Made');
   assert.equal(shipTask.category, 'shipping');
   assert.ok(shipTask.notes.includes('Ticket #: 1Z03G13B0339691067'));
   assert.ok(shipTask.notes.includes('Store: Springdale Store'));
@@ -327,7 +327,7 @@ test('TEMPLATE_CONFIGS builds clean tasks from real user inputs without dummy pl
     details: 'No answer on initial call'
   }, '2026-11-12');
 
-  assert.match(pocTask.title, /Contacted POC at Store #104/);
+  assert.match(pocTask.title, /^Store #104 — Contacted POC/);
   assert.equal(pocTask.category, 'support');
   assert.ok(Core.validateTaskInput(pocTask).valid);
 
@@ -654,4 +654,38 @@ test('Sync persistence: mergeTaskState never reverts local completions or resurr
   assert.equal(viewerMerged.tasks.find((t) => t.id === 'task_6').completed, true);
   assert.equal(viewerMerged.tasks.some((t) => t.id === 'task_7'), false);
   assert.equal(viewerMerged.changedLocal, true);
+});
+
+test('Store-first display title formatting puts store name first across legacy and template formats', () => {
+  assert.equal(
+    Core.formatDisplayTitle({
+      title: 'Shipping ticket 1ZV951410393582002 made for 31st Street (items: Lane 7000 /w cables)',
+      notes: 'Ticket #: 1ZV951410393582002\nStore: 31st Street\nItems: Lane 7000 /w cables'
+    }),
+    '31st Street Shipping label 1ZV951410393582002 Made'
+  );
+
+  assert.equal(
+    Core.formatDisplayTitle({
+      title: 'Shipping ticket 0 made for Hwy 82 (items: ATA)',
+      notes: 'Ticket #: 0\nStore: Hwy 82\nItems: ATA'
+    }),
+    'Hwy 82 Shipping label Made'
+  );
+
+  assert.equal(
+    Core.formatDisplayTitle({
+      title: 'Contacted POC at E Griffin, no response — will check back in 30 mins',
+      notes: 'Store: E Griffin\nPOC: Leslie'
+    }),
+    'E Griffin — Contacted POC, no response — will check back in 30 mins'
+  );
+
+  assert.equal(
+    Core.formatDisplayTitle({
+      title: 'Phone Line verification',
+      notes: 'Store: Melrose\nAction: Verified inbound calls'
+    }),
+    'Melrose — Phone Line verification'
+  );
 });
