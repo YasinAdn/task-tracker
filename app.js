@@ -530,6 +530,9 @@
     } catch {
       // Ignore storage failures
     }
+    if (window.DayflowMotion && typeof window.DayflowMotion.setTheme === 'function') {
+      window.DayflowMotion.setTheme(theme);
+    }
   }
 
   /* -------------------- Work vs Personal Scope Switcher -------------------- */
@@ -807,6 +810,9 @@
     }
 
     els.toastContainer.appendChild(toast);
+    if (window.DayflowMotion && typeof window.DayflowMotion.animateToast === 'function') {
+      window.DayflowMotion.animateToast(toast);
+    }
     timerId = setTimeout(dismiss, undoCallback ? 6000 : 3200);
   }
 
@@ -1169,6 +1175,9 @@
     });
 
     els.templateModal.hidden = false;
+    if (window.DayflowMotion && typeof window.DayflowMotion.animateModalOpen === 'function') {
+      window.DayflowMotion.animateModalOpen(els.templateModal);
+    }
   }
 
   function closeTemplateModal() {
@@ -1452,6 +1461,9 @@
     els.modalError.hidden = true;
 
     els.taskModal.hidden = false;
+    if (window.DayflowMotion && typeof window.DayflowMotion.animateModalOpen === 'function') {
+      window.DayflowMotion.animateModalOpen(els.taskModal);
+    }
     els.modalTitleInput.focus();
   }
 
@@ -1484,6 +1496,9 @@
     els.modalError.hidden = true;
 
     els.taskModal.hidden = false;
+    if (window.DayflowMotion && typeof window.DayflowMotion.animateModalOpen === 'function') {
+      window.DayflowMotion.animateModalOpen(els.taskModal);
+    }
     els.modalTitleInput.focus();
   }
 
@@ -1577,6 +1592,9 @@
       const openView = cardEl.querySelector('.fc-cell-open');
       if (closedView) closedView.setAttribute('aria-hidden', String(nextExpanded));
       if (openView) openView.setAttribute('aria-hidden', String(!nextExpanded));
+      if (typeof forceState !== 'boolean' && window.DayflowMotion && typeof window.DayflowMotion.animateCardUnfold === 'function') {
+        window.DayflowMotion.animateCardUnfold(cardEl);
+      }
     }
     if (triggerEls) {
       const list = Array.isArray(triggerEls) ? triggerEls : [triggerEls];
@@ -2389,6 +2407,22 @@
     if (state.view === 'timeline') {
       renderTimelineView(grouped);
     }
+
+    const motionKey = [
+      state.selectedDate,
+      state.activeScope,
+      state.view,
+      state.filters.status,
+      state.filters.category,
+      state.filters.priority,
+      state.filters.search
+    ].join('|');
+    if (motionKey !== render.lastMotionKey) {
+      render.lastMotionKey = motionKey;
+      if (state.view === 'list' && window.DayflowMotion && typeof window.DayflowMotion.animateTaskList === 'function') {
+        window.DayflowMotion.animateTaskList(els.listView);
+      }
+    }
   }
 
   /* -------------------- Event Wiring -------------------- */
@@ -3174,4 +3208,7 @@
   applySidebarCollapsed(state.sidebarCollapsed);
   wireEvents();
   render();
+  if (window.DayflowMotion && typeof window.DayflowMotion.init === 'function') {
+    window.DayflowMotion.init();
+  }
 })();
