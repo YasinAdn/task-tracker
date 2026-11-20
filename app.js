@@ -32,6 +32,7 @@
     },
     compactView: localStorage.getItem('dayflow_compact_view') === 'true',
     sidebarCollapsed: localStorage.getItem('dayflow_sidebar_collapsed') === 'true',
+    expandedTaskIds: new Set(),
     timelineScrolledOnce: false
   };
 
@@ -119,6 +120,9 @@
     densityToggleBtn: document.getElementById('densityToggleBtn'),
     densityToggleIcon: document.getElementById('densityToggleIcon'),
     densityToggleLabel: document.getElementById('densityToggleLabel'),
+    expandAllBtn: document.getElementById('expandAllBtn'),
+    expandAllIcon: document.getElementById('expandAllIcon'),
+    expandAllLabel: document.getElementById('expandAllLabel'),
     visibleCountLabel: document.getElementById('visibleCountLabel'),
     clearCompletedBtn: document.getElementById('clearCompletedBtn'),
 
@@ -731,13 +735,13 @@
         `;
 
         item.addEventListener('click', () => {
-          openEditModal(task.id);
+          focusTaskInView(task);
           els.searchInstantDropdown.hidden = true;
         });
 
         item.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
-            openEditModal(task.id);
+            focusTaskInView(task);
             els.searchInstantDropdown.hidden = true;
           }
         });
@@ -1505,8 +1509,85 @@
   const EDIT_ICON = '<path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>';
   const DELETE_ICON = '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>';
 
+  function getTaskSummaryPreview(task) {
+    if (!task || !task.notes) return '';
+    const lines = String(task.notes)
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return '';
+
+    const preferred =
+      lines.find((l) => /^(status|action|symptoms|issue|items|poc):/i.test(l)) || lines[0];
+    return lines.length > 1 && !/^(status|action):/i.test(preferred)
+      ? `${preferred} • +${lines.length - 1} more detail${lines.length - 1 === 1 ? '' : 's'}`
+      : preferred;
+  }
+
+  function formatTimestampShort(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+
+  function updateExpandAllButtonState() {
+    if (!els.expandAllBtn || !els.listView) return;
+    const cards = Array.from(els.listView.querySelectorAll('.task-card'));
+    const allExpanded = cards.length > 0 && cards.every((c) => c.classList.contains('is-expanded'));
+    els.expandAllBtn.setAttribute('aria-pressed', String(allExpanded));
+    if (els.expandAllIcon) els.expandAllIcon.textContent = allExpanded ? '▴' : '▾';
+    if (els.expandAllLabel) els.expandAllLabel.textContent = allExpanded ? 'Collapse All' : 'Expand All';
+  }
+
+  function toggleTaskExpanded(taskId, cardEl, bodyEl, forceState) {
+    const isExpanded = state.expandedTaskIds.has(taskId);
+    const nextExpanded = typeof forceState === 'boolean' ? forceState : !isExpanded;
+    if (nextExpanded) {
+      state.expandedTaskIds.add(taskId);
+    } else {
+      state.expandedTaskIds.delete(taskId);
+    }
+    if (cardEl) {
+      cardEl.classList.toggle('is-expanded', nextExpanded);
+    }
+    if (bodyEl) {
+      bodyEl.setAttribute('aria-expanded', String(nextExpanded));
+      const pillText = bodyEl.querySelector('.task-expand-label');
+      if (pillText) pillText.textContent = nextExpanded ? 'Less' : 'Details';
+    }
+    updateExpandAllButtonState();
+  }
+
+  function focusTaskInView(task) {
+    if (!task) return;
+    const taskScope = task.scope === 'personal' ? 'personal' : 'work';
+    state.expandedTaskIds.add(task.id);
+    if (taskScope !== state.activeScope) {
+      state.activeScope = taskScope;
+      try {
+        localStorage.setItem(SCOPE_STORAGE_KEY, taskScope);
+      } catch {}
+    }
+    if (task.date && task.date !== state.selectedDate && !state.filters.search) {
+      state.selectedDate = task.date;
+    }
+    state.view = 'list';
+    render();
+    const targetCard = els.listView.querySelector(`.task-card[data-task-id="${CSS.escape(task.id)}"]`);
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
   function buildTaskCard(task, options = {}) {
     const isSearchMode = Boolean(options.showDate || state.filters.search);
+    const isExpanded = state.expandedTaskIds.has(task.id);
     const cat = Core.CATEGORIES[task.category] || Core.CATEGORIES.support || Core.CATEGORIES.work;
     const prio = Core.PRIORITIES[task.priority] || Core.PRIORITIES.medium;
 
@@ -1514,7 +1595,8 @@
     card.className =
       'task-card' +
       (task.completed ? ' is-completed' : '') +
-      (state.compactView ? ' compact-card' : '');
+      (state.compactView ? ' compact-card' : '') +
+      (isExpanded ? ' is-expanded' : '');
     card.style.setProperty('--cat-color', cat.color);
     card.dataset.taskId = task.id;
 
@@ -1527,8 +1609,24 @@
 
     const body = document.createElement('div');
     body.className = 'task-body';
-    body.title = 'Click to edit task';
-    body.addEventListener('click', () => openEditModal(task.id));
+    body.tabIndex = 0;
+    body.setAttribute('role', 'button');
+    body.setAttribute('aria-expanded', String(isExpanded));
+    body.title = 'Click to expand or collapse detailed information';
+    body.addEventListener('click', (e) => {
+      if (e.target.closest('.task-details')) return;
+      toggleTaskExpanded(task.id, card, body);
+    });
+    body.addEventListener('keydown', (e) => {
+      if (e.target !== body) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleTaskExpanded(task.id, card, body);
+      }
+    });
+
+    const summary = document.createElement('div');
+    summary.className = 'task-summary';
 
     const top = document.createElement('div');
     top.className = 'task-top';
@@ -1566,7 +1664,20 @@
     prioBadge.textContent = prio.label;
     top.appendChild(prioBadge);
 
-    body.appendChild(top);
+    const expandPill = document.createElement('span');
+    expandPill.className = 'task-expand-pill';
+    const expandLabel = document.createElement('span');
+    expandLabel.className = 'task-expand-label';
+    expandLabel.textContent = isExpanded ? 'Less' : 'Details';
+    const expandChevron = document.createElement('i');
+    expandChevron.className = 'task-expand-chevron';
+    expandChevron.setAttribute('aria-hidden', 'true');
+    expandChevron.textContent = '▾';
+    expandPill.appendChild(expandLabel);
+    expandPill.appendChild(expandChevron);
+    top.appendChild(expandPill);
+
+    summary.appendChild(top);
 
     const meta = document.createElement('div');
     meta.className = 'task-meta';
@@ -1578,23 +1689,20 @@
       meta.appendChild(rolloverBadge);
     }
 
+    let timeText = 'Anytime';
     if (task.startTime) {
       const startMins = Core.timeToMinutes(task.startTime);
       const endMins = Core.timeToMinutes(task.endTime);
-      const timeBadge = document.createElement('span');
-      timeBadge.className = 'time-badge';
       const durationStr =
         startMins !== null && endMins !== null && endMins > startMins
           ? ` (${Core.formatDuration(endMins - startMins)})`
           : '';
-      timeBadge.textContent = `${Core.formatTime12h(task.startTime)} - ${Core.formatTime12h(task.endTime)}${durationStr}`;
-      meta.appendChild(timeBadge);
-    } else {
-      const anytimeBadge = document.createElement('span');
-      anytimeBadge.className = 'time-badge';
-      anytimeBadge.textContent = 'Anytime';
-      meta.appendChild(anytimeBadge);
+      timeText = `${Core.formatTime12h(task.startTime)} - ${Core.formatTime12h(task.endTime)}${durationStr}`;
     }
+    const timeBadge = document.createElement('span');
+    timeBadge.className = 'time-badge';
+    timeBadge.textContent = timeText;
+    meta.appendChild(timeBadge);
 
     const catBadge = document.createElement('span');
     catBadge.className = 'cat-badge';
@@ -1607,18 +1715,39 @@
     catBadge.appendChild(catText);
     meta.appendChild(catBadge);
 
+    let alertSummaryText = '';
     if (task.remindAt && !task.completed) {
       const remindMs = Date.parse(task.remindAt);
       if (!Number.isNaN(remindMs)) {
         const diffMins = Math.round((remindMs - Date.now()) / 60000);
+        alertSummaryText = diffMins > 0 ? `⏰ In ${diffMins}m` : '⏰ Due Now';
         const alertTag = document.createElement('span');
         alertTag.className = 'followup-indicator-tag';
-        alertTag.textContent = diffMins > 0 ? `⏰ In ${diffMins}m` : '⏰ Due Now';
+        alertTag.textContent = alertSummaryText;
         meta.appendChild(alertTag);
       }
     }
 
-    body.appendChild(meta);
+    summary.appendChild(meta);
+
+    const summaryPreview = getTaskSummaryPreview(task);
+    if (summaryPreview) {
+      const previewEl = document.createElement('p');
+      previewEl.className = 'task-summary-preview';
+      if (state.filters.search) {
+        previewEl.innerHTML = highlightSearchMatches(summaryPreview, state.filters.search);
+      } else {
+        previewEl.textContent = summaryPreview;
+      }
+      summary.appendChild(previewEl);
+    }
+
+    body.appendChild(summary);
+
+    // Expandable Detailed Information Drawer
+    const details = document.createElement('div');
+    details.className = 'task-details';
+    details.addEventListener('click', (e) => e.stopPropagation());
 
     if (task.notes) {
       const notesEl = document.createElement('div');
@@ -1636,16 +1765,102 @@
           keySpan.textContent = match[1].trim() + ':';
           const valSpan = document.createElement('span');
           valSpan.className = 'note-val';
-          valSpan.textContent = match[2].trim();
+          const rawVal = match[2].trim();
+          if (state.filters.search) {
+            valSpan.innerHTML = highlightSearchMatches(rawVal, state.filters.search);
+          } else {
+            valSpan.textContent = rawVal;
+          }
           lineEl.appendChild(keySpan);
           lineEl.appendChild(valSpan);
+        } else if (state.filters.search) {
+          lineEl.innerHTML = highlightSearchMatches(trimmed, state.filters.search);
         } else {
           lineEl.textContent = trimmed;
         }
         notesEl.appendChild(lineEl);
       });
-      body.appendChild(notesEl);
+      details.appendChild(notesEl);
+    } else {
+      const noNotes = document.createElement('p');
+      noNotes.className = 'task-notes-empty';
+      noNotes.textContent = 'No additional notes recorded for this task.';
+      details.appendChild(noNotes);
     }
+
+    const detailGrid = document.createElement('div');
+    detailGrid.className = 'task-detail-grid';
+
+    const detailItems = [
+      { label: 'Scheduled Date', value: formatDisplayDate(task.date) },
+      { label: 'Time Window', value: timeText },
+      { label: 'Section & Category', value: `${taskScope === 'personal' ? 'Personal' : 'Work'} • ${cat.label}` },
+      {
+        label: 'Status',
+        value: task.completed
+          ? 'Completed'
+          : task.date < state.selectedDate
+            ? `Pending (Rolled over from ${formatShortDate(task.date)})`
+            : 'Pending'
+      },
+      { label: 'Last Updated', value: formatTimestampShort(task.updatedAt || task.createdAt) }
+    ];
+    if (alertSummaryText) {
+      detailItems.push({ label: 'Follow-up Alert', value: `${alertSummaryText} (${formatTimestampShort(task.remindAt)})` });
+    }
+
+    detailItems.forEach((entry) => {
+      const cell = document.createElement('div');
+      cell.className = 'task-detail-item';
+      const lbl = document.createElement('span');
+      lbl.className = 'task-detail-label';
+      lbl.textContent = entry.label;
+      const val = document.createElement('span');
+      val.className = 'task-detail-value';
+      val.textContent = entry.value;
+      cell.appendChild(lbl);
+      cell.appendChild(val);
+      detailGrid.appendChild(cell);
+    });
+    details.appendChild(detailGrid);
+
+    const detailFooter = document.createElement('div');
+    detailFooter.className = 'task-detail-footer';
+
+    const detailEditBtn = document.createElement('button');
+    detailEditBtn.type = 'button';
+    detailEditBtn.className = 'btn btn-subtle btn-sm';
+    detailEditBtn.textContent = '✎ Edit Task';
+    detailEditBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditModal(task.id);
+    });
+    detailFooter.appendChild(detailEditBtn);
+
+    const detailSnooze15 = document.createElement('button');
+    detailSnooze15.type = 'button';
+    detailSnooze15.className = 'btn btn-subtle btn-sm';
+    detailSnooze15.textContent = '⏰ +15m Follow-up';
+    detailSnooze15.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleSnoozeTask(task.id, 0.25);
+    });
+    detailFooter.appendChild(detailSnooze15);
+
+    if (task.date !== state.selectedDate) {
+      const detailMoveToday = document.createElement('button');
+      detailMoveToday.type = 'button';
+      detailMoveToday.className = 'btn btn-subtle btn-sm';
+      detailMoveToday.textContent = '→ Move to Today';
+      detailMoveToday.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleMoveTaskToDate(task.id, state.selectedDate);
+      });
+      detailFooter.appendChild(detailMoveToday);
+    }
+
+    details.appendChild(detailFooter);
+    body.appendChild(details);
 
     const actions = document.createElement('div');
     actions.className = 'task-actions';
@@ -1689,7 +1904,10 @@
     editBtn.title = 'Edit task';
     editBtn.setAttribute('aria-label', `Edit "${task.title}"`);
     editBtn.appendChild(createSvgIcon(EDIT_ICON, 15));
-    editBtn.addEventListener('click', () => openEditModal(task.id));
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditModal(task.id);
+    });
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
@@ -1697,7 +1915,10 @@
     deleteBtn.title = 'Remove task';
     deleteBtn.setAttribute('aria-label', `Remove "${task.title}"`);
     deleteBtn.appendChild(createSvgIcon(DELETE_ICON, 15));
-    deleteBtn.addEventListener('click', () => handleDeleteTask(task.id));
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleDeleteTask(task.id);
+    });
 
     actions.appendChild(snoozeBtn);
     actions.appendChild(editBtn);
@@ -1753,6 +1974,7 @@
           els.searchList.replaceChildren(...grouped.all.map((t) => buildTaskCard(t, { showDate: true })));
         }
       }
+      updateExpandAllButtonState();
       return;
     }
 
@@ -1778,17 +2000,18 @@
     }
 
     const overdueList = grouped.overdue || [];
-    els.overdueList.replaceChildren(...overdueList.map(buildTaskCard));
+    els.overdueList.replaceChildren(...overdueList.map((t) => buildTaskCard(t)));
     els.overdueCount.textContent = String(overdueList.length);
     els.overdueSection.hidden = overdueList.length === 0;
 
-    els.scheduledList.replaceChildren(...grouped.scheduled.map(buildTaskCard));
+    els.scheduledList.replaceChildren(...grouped.scheduled.map((t) => buildTaskCard(t)));
     els.scheduledCount.textContent = String(grouped.scheduled.length);
     els.scheduledSection.hidden = grouped.scheduled.length === 0;
 
-    els.anytimeList.replaceChildren(...grouped.anytime.map(buildTaskCard));
+    els.anytimeList.replaceChildren(...grouped.anytime.map((t) => buildTaskCard(t)));
     els.anytimeCount.textContent = String(grouped.anytime.length);
     els.anytimeSection.hidden = grouped.anytime.length === 0;
+    updateExpandAllButtonState();
   }
 
   function renderTimelineView(grouped) {
@@ -2182,6 +2405,19 @@
         state.compactView = !state.compactView;
         localStorage.setItem('dayflow_compact_view', String(state.compactView));
         applyCompactView(state.compactView);
+      });
+    }
+
+    if (els.expandAllBtn) {
+      els.expandAllBtn.addEventListener('click', () => {
+        const cards = Array.from(els.listView.querySelectorAll('.task-card'));
+        const allExpanded = cards.length > 0 && cards.every((c) => c.classList.contains('is-expanded'));
+        const nextExpand = !allExpanded;
+        cards.forEach((cardEl) => {
+          const id = cardEl.dataset.taskId;
+          const bodyEl = cardEl.querySelector('.task-body');
+          if (id) toggleTaskExpanded(id, cardEl, bodyEl, nextExpand);
+        });
       });
     }
 
@@ -2709,10 +2945,10 @@
       }
     }, true);
 
-    // Viewer Mode Enforcement: allow read-only browsing while blocking write controls
+    // Viewer Mode Enforcement: allow read-only browsing & card expanding while blocking write controls
     function isViewerAllowedInteraction(target) {
       if (!target || typeof target.closest !== 'function') return false;
-      if (target.closest('.task-checkbox, .task-actions, .timeline-item-actions, #quickAddCard, #dataToolsCard')) {
+      if (target.closest('.task-checkbox, .task-actions, .task-detail-footer, .timeline-item-actions, #quickAddCard, #dataToolsCard')) {
         return false;
       }
       if (target.closest('#followupCompleteBtn, #followupSnooze15Btn, #followupSnooze1hBtn, #clearCompletedBtn, #moveAllOverdueBtn, #openAddModalBtn, #emptyAddBtn, #emptySampleBtn, #mobileAddFab')) {
@@ -2720,7 +2956,7 @@
       }
       return Boolean(
         target.closest(
-          '#logoutBtn, .date-nav, .scope-switcher, .search-wrap, #searchSection, .view-tabs, #densityToggleBtn, #themeToggleBtn, #notificationToggleBtn, #followupDismissBtn, #filterCategory, #filterPriority, .seg-btn[data-status], #resetFiltersBtn, .task-date-badge'
+          '#logoutBtn, .date-nav, .scope-switcher, .search-wrap, #searchSection, .view-tabs, #densityToggleBtn, #expandAllBtn, #themeToggleBtn, #notificationToggleBtn, #followupDismissBtn, #filterCategory, #filterPriority, .seg-btn[data-status], #resetFiltersBtn, .task-date-badge, .task-body'
         )
       );
     }
