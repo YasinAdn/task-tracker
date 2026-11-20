@@ -1509,19 +1509,35 @@
   const EDIT_ICON = '<path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>';
   const DELETE_ICON = '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>';
 
-  function getTaskSummaryPreview(task) {
-    if (!task || !task.notes) return '';
-    const lines = String(task.notes)
+  function extractStructuredNotes(task) {
+    const map = {};
+    const plainLines = [];
+    if (!task || !task.notes) return { map, plainLines };
+    String(task.notes)
       .split('\n')
       .map((l) => l.trim())
-      .filter(Boolean);
-    if (lines.length === 0) return '';
+      .filter(Boolean)
+      .forEach((line) => {
+        const match = /^([A-Za-z0-9\s#/-]+):(.*)$/.exec(line);
+        if (match) {
+          const key = match[1].trim().toLowerCase();
+          const val = match[2].trim();
+          if (val) map[key] = val;
+        } else {
+          plainLines.push(line);
+        }
+      });
+    return { map, plainLines };
+  }
 
-    const preferred =
-      lines.find((l) => /^(status|action|symptoms|issue|items|poc):/i.test(l)) || lines[0];
-    return lines.length > 1 && !/^(status|action):/i.test(preferred)
-      ? `${preferred} • +${lines.length - 1} more detail${lines.length - 1 === 1 ? '' : 's'}`
-      : preferred;
+  function formatStubDateLabel(dateKey) {
+    const todayKey = Core.formatDateKey(new Date());
+    const tomorrowKey = Core.shiftDateKey(todayKey, 1);
+    const yesterdayKey = Core.shiftDateKey(todayKey, -1);
+    if (dateKey === todayKey) return 'TODAY';
+    if (dateKey === tomorrowKey) return 'TOMORROW';
+    if (dateKey === yesterdayKey) return 'YESTERDAY';
+    return formatShortDate(dateKey).toUpperCase();
   }
 
   function formatTimestampShort(iso) {
@@ -1545,7 +1561,7 @@
     if (els.expandAllLabel) els.expandAllLabel.textContent = allExpanded ? 'Collapse All' : 'Expand All';
   }
 
-  function toggleTaskExpanded(taskId, cardEl, bodyEl, forceState) {
+  function toggleTaskExpanded(taskId, cardEl, triggerEls, forceState) {
     const isExpanded = state.expandedTaskIds.has(taskId);
     const nextExpanded = typeof forceState === 'boolean' ? forceState : !isExpanded;
     if (nextExpanded) {
@@ -1555,11 +1571,16 @@
     }
     if (cardEl) {
       cardEl.classList.toggle('is-expanded', nextExpanded);
+      const closedView = cardEl.querySelector('.fc-cell-closed');
+      const openView = cardEl.querySelector('.fc-cell-open');
+      if (closedView) closedView.setAttribute('aria-hidden', String(nextExpanded));
+      if (openView) openView.setAttribute('aria-hidden', String(!nextExpanded));
     }
-    if (bodyEl) {
-      bodyEl.setAttribute('aria-expanded', String(nextExpanded));
-      const pillText = bodyEl.querySelector('.task-expand-label');
-      if (pillText) pillText.textContent = nextExpanded ? 'Less' : 'Details';
+    if (triggerEls) {
+      const list = Array.isArray(triggerEls) ? triggerEls : [triggerEls];
+      list.forEach((el) => {
+        if (el) el.setAttribute('aria-expanded', String(nextExpanded));
+      });
     }
     updateExpandAllButtonState();
   }
@@ -1585,60 +1606,154 @@
     }
   }
 
+  function createTaskCheckbox(task) {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'task-checkbox';
+    checkbox.checked = Boolean(task.completed);
+    checkbox.setAttribute('aria-label', `Mark "${task.title}" as ${task.completed ? 'pending' : 'completed'}`);
+    checkbox.addEventListener('click', (e) => e.stopPropagation());
+    checkbox.addEventListener('change', () => handleToggleTask(task.id));
+    return checkbox;
+  }
+
   function buildTaskCard(task, options = {}) {
     const isSearchMode = Boolean(options.showDate || state.filters.search);
     const isExpanded = state.expandedTaskIds.has(task.id);
+    const displayIndex = options.index || 1;
     const cat = Core.CATEGORIES[task.category] || Core.CATEGORIES.support || Core.CATEGORIES.work;
     const prio = Core.PRIORITIES[task.priority] || Core.PRIORITIES.medium;
+    const taskScope = task.scope === 'personal' ? 'personal' : 'work';
+    const { map: noteMap, plainLines } = extractStructuredNotes(task);
 
     const card = document.createElement('article');
     card.className =
-      'task-card' +
+      'task-card folding-card' +
       (task.completed ? ' is-completed' : '') +
       (state.compactView ? ' compact-card' : '') +
       (isExpanded ? ' is-expanded' : '');
     card.style.setProperty('--cat-color', cat.color);
     card.dataset.taskId = task.id;
 
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'task-checkbox';
-    checkbox.checked = Boolean(task.completed);
-    checkbox.setAttribute('aria-label', `Mark "${task.title}" as ${task.completed ? 'pending' : 'completed'}`);
-    checkbox.addEventListener('change', () => handleToggleTask(task.id));
+    // Schedule formatting
+    let timeText = 'Anytime';
+    let stubTimeText = 'ANYTIME';
+    let durationLabel = 'Flexible';
+    if (task.startTime) {
+      const startMins = Core.timeToMinutes(task.startTime);
+      const endMins = Core.timeToMinutes(task.endTime);
+      const dur = startMins !== null && endMins !== null && endMins > startMins
+        ? Core.formatDuration(endMins - startMins)
+        : '';
+      durationLabel = dur || 'Scheduled';
+      stubTimeText = Core.formatTime12h(task.startTime);
+      timeText = `${Core.formatTime12h(task.startTime)} - ${Core.formatTime12h(task.endTime)}${dur ? ` (${dur})` : ''}`;
+    }
 
-    const body = document.createElement('div');
-    body.className = 'task-body';
-    body.tabIndex = 0;
-    body.setAttribute('role', 'button');
-    body.setAttribute('aria-expanded', String(isExpanded));
-    body.title = 'Click to expand or collapse detailed information';
-    body.addEventListener('click', (e) => {
-      if (e.target.closest('.task-details')) return;
-      toggleTaskExpanded(task.id, card, body);
-    });
-    body.addEventListener('keydown', (e) => {
-      if (e.target !== body) return;
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggleTaskExpanded(task.id, card, body);
+    let alertSummaryText = '';
+    if (task.remindAt && !task.completed) {
+      const remindMs = Date.parse(task.remindAt);
+      if (!Number.isNaN(remindMs)) {
+        const diffMins = Math.round((remindMs - Date.now()) / 60000);
+        alertSummaryText = diffMins > 0 ? `⏰ In ${diffMins}m` : '⏰ Due Now';
       }
-    });
+    }
 
-    const summary = document.createElement('div');
-    summary.className = 'task-summary';
+    // Two-line route summary (inspired by origin -> destination connector lines)
+    const primaryLine = noteMap.store
+      ? `Store: ${noteMap.store}${noteMap.poc ? ` (POC: ${noteMap.poc})` : ''}`
+      : `${taskScope === 'personal' ? '👤 Personal' : '💼 Work'} • ${cat.label}`;
+    const secondaryLine =
+      noteMap.status ||
+      noteMap.action ||
+      noteMap.symptoms ||
+      noteMap.issue ||
+      noteMap.items ||
+      plainLines[0] ||
+      (task.completed ? 'Marked completed' : task.date < state.selectedDate ? `Rolled over from ${formatShortDate(task.date)}` : 'Click card to view full details');
 
-    const top = document.createElement('div');
-    top.className = 'task-top';
+    // Bottom 3 KPI summary columns (Store/Category, Priority/Item, Status/Ticket)
+    const kpi1 = noteMap.store
+      ? { label: noteMap.poc ? 'STORE / POC' : 'STORE', value: noteMap.poc ? `${noteMap.store} (${noteMap.poc})` : noteMap.store }
+      : { label: 'CATEGORY', value: cat.label };
 
-    const titleEl = document.createElement('span');
+    const kpi2 = noteMap.items || noteMap.hardware
+      ? { label: noteMap.hardware ? 'HARDWARE' : 'ITEMS', value: noteMap.hardware || noteMap.items }
+      : { label: 'PRIORITY', value: prio.label.toUpperCase() };
+
+    let kpi3;
+    if (task.completed) {
+      kpi3 = { label: 'STATUS', value: 'Completed' };
+    } else if (alertSummaryText) {
+      kpi3 = { label: 'FOLLOW-UP', value: alertSummaryText };
+    } else if (noteMap['ticket #'] && noteMap['ticket #'].toUpperCase() !== 'N/A') {
+      kpi3 = { label: 'TICKET #', value: noteMap['ticket #'] };
+    } else if (task.date < state.selectedDate) {
+      kpi3 = { label: 'ROLLED OVER', value: formatStubDateLabel(task.date) };
+    } else {
+      kpi3 = { label: 'DURATION', value: durationLabel };
+    }
+
+    /* ======================== 1. COLLAPSED SUMMARY CARD ======================== */
+    const closedCell = document.createElement('div');
+    closedCell.className = 'fc-cell-closed';
+    closedCell.tabIndex = 0;
+    closedCell.setAttribute('role', 'button');
+    closedCell.setAttribute('aria-expanded', String(isExpanded));
+    closedCell.setAttribute('aria-hidden', String(isExpanded));
+    closedCell.title = 'Click card to unfold detailed information';
+
+    // Left colored stub pane
+    const stub = document.createElement('div');
+    stub.className = 'fc-stub';
+
+    const stubTop = document.createElement('div');
+    stubTop.className = 'fc-stub-top';
+    stubTop.appendChild(createTaskCheckbox(task));
+    const stubPrio = document.createElement('span');
+    stubPrio.className = `fc-stub-prio prio-${task.priority}`;
+    stubPrio.textContent = prio.label.toUpperCase();
+    stubTop.appendChild(stubPrio);
+    stub.appendChild(stubTop);
+
+    const stubNum = document.createElement('div');
+    stubNum.className = 'fc-stub-num';
+    stubNum.textContent = String(displayIndex);
+    stub.appendChild(stubNum);
+
+    const stubFooter = document.createElement('div');
+    stubFooter.className = 'fc-stub-schedule';
+    const stubDateEl = document.createElement('span');
+    stubDateEl.className = 'fc-stub-date';
+    stubDateEl.textContent = formatStubDateLabel(task.date);
+    const stubTimeEl = document.createElement('span');
+    stubTimeEl.className = 'fc-stub-time';
+    stubTimeEl.textContent = stubTimeText;
+    stubFooter.appendChild(stubDateEl);
+    stubFooter.appendChild(stubTimeEl);
+    stub.appendChild(stubFooter);
+
+    // Right crisp summary pane
+    const summaryMain = document.createElement('div');
+    summaryMain.className = 'fc-summary-main';
+
+    const summaryTop = document.createElement('div');
+    summaryTop.className = 'fc-summary-top';
+
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'fc-title-wrap';
+    const titleEl = document.createElement('h4');
     titleEl.className = 'task-title';
     if (state.filters.search) {
       titleEl.innerHTML = highlightSearchMatches(task.title, state.filters.search);
     } else {
       titleEl.textContent = task.title;
     }
-    top.appendChild(titleEl);
+    titleWrap.appendChild(titleEl);
+    summaryTop.appendChild(titleWrap);
+
+    const quickActions = document.createElement('div');
+    quickActions.className = 'task-actions fc-quick-actions';
 
     if (isSearchMode || task.date !== state.selectedDate) {
       const dateTag = document.createElement('button');
@@ -1650,153 +1765,194 @@
         e.stopPropagation();
         changeDate(task.date);
       });
-      top.appendChild(dateTag);
+      quickActions.appendChild(dateTag);
     }
 
-    const taskScope = task.scope === 'personal' ? 'personal' : 'work';
-    const scopeTag = document.createElement('span');
-    scopeTag.className = `task-scope-tag scope-${taskScope}`;
-    scopeTag.textContent = taskScope === 'personal' ? '👤 Personal' : '💼 Work';
-    top.appendChild(scopeTag);
+    const editBtnClosed = document.createElement('button');
+    editBtnClosed.type = 'button';
+    editBtnClosed.className = 'icon-btn';
+    editBtnClosed.title = 'Edit task';
+    editBtnClosed.setAttribute('aria-label', `Edit "${task.title}"`);
+    editBtnClosed.appendChild(createSvgIcon(EDIT_ICON, 14));
+    editBtnClosed.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditModal(task.id);
+    });
 
-    const prioBadge = document.createElement('span');
-    prioBadge.className = `prio-badge prio-${task.priority}`;
-    prioBadge.textContent = prio.label;
-    top.appendChild(prioBadge);
+    const deleteBtnClosed = document.createElement('button');
+    deleteBtnClosed.type = 'button';
+    deleteBtnClosed.className = 'icon-btn danger';
+    deleteBtnClosed.title = 'Remove task';
+    deleteBtnClosed.setAttribute('aria-label', `Remove "${task.title}"`);
+    deleteBtnClosed.appendChild(createSvgIcon(DELETE_ICON, 14));
+    deleteBtnClosed.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleDeleteTask(task.id);
+    });
 
-    const expandPill = document.createElement('span');
-    expandPill.className = 'task-expand-pill';
-    const expandLabel = document.createElement('span');
-    expandLabel.className = 'task-expand-label';
-    expandLabel.textContent = isExpanded ? 'Less' : 'Details';
-    const expandChevron = document.createElement('i');
-    expandChevron.className = 'task-expand-chevron';
-    expandChevron.setAttribute('aria-hidden', 'true');
-    expandChevron.textContent = '▾';
-    expandPill.appendChild(expandLabel);
-    expandPill.appendChild(expandChevron);
-    top.appendChild(expandPill);
+    quickActions.appendChild(editBtnClosed);
+    quickActions.appendChild(deleteBtnClosed);
+    summaryTop.appendChild(quickActions);
+    summaryMain.appendChild(summaryTop);
 
-    summary.appendChild(top);
+    // Two-line connector strip (Ramotion FoldingCell style)
+    const routeBox = document.createElement('div');
+    routeBox.className = 'fc-route-box';
 
-    const meta = document.createElement('div');
-    meta.className = 'task-meta';
-
-    if (task.date < state.selectedDate && !task.completed) {
-      const rolloverBadge = document.createElement('span');
-      rolloverBadge.className = 'rollover-badge';
-      rolloverBadge.textContent = `Rolled over (${formatShortDate(task.date)})`;
-      meta.appendChild(rolloverBadge);
+    const routeRow1 = document.createElement('div');
+    routeRow1.className = 'fc-route-line fc-route-origin';
+    const r1Text = document.createElement('span');
+    r1Text.className = 'fc-route-text';
+    if (state.filters.search) {
+      r1Text.innerHTML = highlightSearchMatches(primaryLine, state.filters.search);
+    } else {
+      r1Text.textContent = primaryLine;
     }
+    routeRow1.appendChild(r1Text);
 
-    let timeText = 'Anytime';
-    if (task.startTime) {
-      const startMins = Core.timeToMinutes(task.startTime);
-      const endMins = Core.timeToMinutes(task.endTime);
-      const durationStr =
-        startMins !== null && endMins !== null && endMins > startMins
-          ? ` (${Core.formatDuration(endMins - startMins)})`
-          : '';
-      timeText = `${Core.formatTime12h(task.startTime)} - ${Core.formatTime12h(task.endTime)}${durationStr}`;
+    const routeRow2 = document.createElement('div');
+    routeRow2.className = 'fc-route-line fc-route-dest';
+    const r2Text = document.createElement('span');
+    r2Text.className = 'fc-route-text';
+    if (state.filters.search) {
+      r2Text.innerHTML = highlightSearchMatches(secondaryLine, state.filters.search);
+    } else {
+      r2Text.textContent = secondaryLine;
     }
-    const timeBadge = document.createElement('span');
-    timeBadge.className = 'time-badge';
-    timeBadge.textContent = timeText;
-    meta.appendChild(timeBadge);
+    routeRow2.appendChild(r2Text);
 
-    const catBadge = document.createElement('span');
-    catBadge.className = 'cat-badge';
-    const dot = document.createElement('span');
-    dot.className = 'cat-dot';
-    dot.style.background = cat.color;
-    const catText = document.createElement('span');
-    catText.textContent = cat.label;
-    catBadge.appendChild(dot);
-    catBadge.appendChild(catText);
-    meta.appendChild(catBadge);
+    routeBox.appendChild(routeRow1);
+    routeBox.appendChild(routeRow2);
+    summaryMain.appendChild(routeBox);
 
-    let alertSummaryText = '';
-    if (task.remindAt && !task.completed) {
-      const remindMs = Date.parse(task.remindAt);
-      if (!Number.isNaN(remindMs)) {
-        const diffMins = Math.round((remindMs - Date.now()) / 60000);
-        alertSummaryText = diffMins > 0 ? `⏰ In ${diffMins}m` : '⏰ Due Now';
-        const alertTag = document.createElement('span');
-        alertTag.className = 'followup-indicator-tag';
-        alertTag.textContent = alertSummaryText;
-        meta.appendChild(alertTag);
-      }
+    const divider = document.createElement('div');
+    divider.className = 'fc-divider';
+    summaryMain.appendChild(divider);
+
+    const kpiRow = document.createElement('div');
+    kpiRow.className = 'fc-kpi-row';
+    [kpi1, kpi2, kpi3].forEach((col) => {
+      const cell = document.createElement('div');
+      cell.className = 'fc-kpi-col';
+      const lbl = document.createElement('span');
+      lbl.className = 'fc-kpi-label';
+      lbl.textContent = col.label;
+      const val = document.createElement('span');
+      val.className = 'fc-kpi-value';
+      val.textContent = col.value;
+      cell.appendChild(lbl);
+      cell.appendChild(val);
+      kpiRow.appendChild(cell);
+    });
+    summaryMain.appendChild(kpiRow);
+
+    closedCell.appendChild(stub);
+    closedCell.appendChild(summaryMain);
+
+    /* ======================== 2. EXPANDED DETAILED CARD ======================== */
+    const openCell = document.createElement('div');
+    openCell.className = 'fc-cell-open';
+    openCell.setAttribute('aria-hidden', String(!isExpanded));
+
+    // Colored Full-Width Top Header Bar (click to fold back up)
+    const openHeader = document.createElement('div');
+    openHeader.className = 'fc-open-header';
+    openHeader.tabIndex = 0;
+    openHeader.setAttribute('role', 'button');
+    openHeader.setAttribute('aria-expanded', String(isExpanded));
+    openHeader.title = 'Click header to fold card back to summary';
+
+    const openHeaderLeft = document.createElement('div');
+    openHeaderLeft.className = 'fc-open-header-left';
+    openHeaderLeft.appendChild(createTaskCheckbox(task));
+
+    const openIndexPill = document.createElement('span');
+    openIndexPill.className = 'fc-open-index';
+    openIndexPill.textContent = `#${displayIndex}`;
+    openHeaderLeft.appendChild(openIndexPill);
+
+    const openTitleWrap = document.createElement('div');
+    openTitleWrap.className = 'fc-open-title-wrap';
+    const openTitle = document.createElement('h4');
+    openTitle.className = 'fc-open-title';
+    if (state.filters.search) {
+      openTitle.innerHTML = highlightSearchMatches(task.title, state.filters.search);
+    } else {
+      openTitle.textContent = task.title;
     }
+    const openSub = document.createElement('span');
+    openSub.className = 'fc-open-sub';
+    openSub.textContent = `${formatDisplayDate(task.date)} • ${timeText} • ${taskScope === 'personal' ? '👤 Personal' : '💼 Work'}`;
+    openTitleWrap.appendChild(openTitle);
+    openTitleWrap.appendChild(openSub);
+    openHeaderLeft.appendChild(openTitleWrap);
 
-    summary.appendChild(meta);
+    const openHeaderRight = document.createElement('div');
+    openHeaderRight.className = 'fc-open-header-right';
+    const openPrio = document.createElement('span');
+    openPrio.className = 'fc-open-prio';
+    openPrio.textContent = prio.label.toUpperCase();
+    const foldBtn = document.createElement('span');
+    foldBtn.className = 'fc-fold-pill';
+    foldBtn.textContent = '▴ Fold';
+    openHeaderRight.appendChild(openPrio);
+    openHeaderRight.appendChild(foldBtn);
 
-    const summaryPreview = getTaskSummaryPreview(task);
-    if (summaryPreview) {
-      const previewEl = document.createElement('p');
-      previewEl.className = 'task-summary-preview';
-      if (state.filters.search) {
-        previewEl.innerHTML = highlightSearchMatches(summaryPreview, state.filters.search);
-      } else {
-        previewEl.textContent = summaryPreview;
-      }
-      summary.appendChild(previewEl);
-    }
+    openHeader.appendChild(openHeaderLeft);
+    openHeader.appendChild(openHeaderRight);
 
-    body.appendChild(summary);
-
-    // Expandable Detailed Information Drawer
-    const details = document.createElement('div');
-    details.className = 'task-details';
-    details.addEventListener('click', (e) => e.stopPropagation());
+    // Expanded Detailed Body
+    const openBody = document.createElement('div');
+    openBody.className = 'fc-open-body';
 
     if (task.notes) {
       const notesEl = document.createElement('div');
       notesEl.className = 'task-notes';
-      const lines = String(task.notes).split('\n');
-      lines.forEach((line) => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        const lineEl = document.createElement('div');
-        lineEl.className = 'note-line';
-        const match = /^([A-Za-z0-9\s#/-]+):(.*)$/.exec(trimmed);
-        if (match) {
-          const keySpan = document.createElement('span');
-          keySpan.className = 'note-key';
-          keySpan.textContent = match[1].trim() + ':';
-          const valSpan = document.createElement('span');
-          valSpan.className = 'note-val';
-          const rawVal = match[2].trim();
-          if (state.filters.search) {
-            valSpan.innerHTML = highlightSearchMatches(rawVal, state.filters.search);
+      String(task.notes)
+        .split('\n')
+        .forEach((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return;
+          const lineEl = document.createElement('div');
+          lineEl.className = 'note-line';
+          const match = /^([A-Za-z0-9\s#/-]+):(.*)$/.exec(trimmed);
+          if (match) {
+            const keySpan = document.createElement('span');
+            keySpan.className = 'note-key';
+            keySpan.textContent = match[1].trim() + ':';
+            const valSpan = document.createElement('span');
+            valSpan.className = 'note-val';
+            const rawVal = match[2].trim();
+            if (state.filters.search) {
+              valSpan.innerHTML = highlightSearchMatches(rawVal, state.filters.search);
+            } else {
+              valSpan.textContent = rawVal;
+            }
+            lineEl.appendChild(keySpan);
+            lineEl.appendChild(valSpan);
+          } else if (state.filters.search) {
+            lineEl.innerHTML = highlightSearchMatches(trimmed, state.filters.search);
           } else {
-            valSpan.textContent = rawVal;
+            lineEl.textContent = trimmed;
           }
-          lineEl.appendChild(keySpan);
-          lineEl.appendChild(valSpan);
-        } else if (state.filters.search) {
-          lineEl.innerHTML = highlightSearchMatches(trimmed, state.filters.search);
-        } else {
-          lineEl.textContent = trimmed;
-        }
-        notesEl.appendChild(lineEl);
-      });
-      details.appendChild(notesEl);
+          notesEl.appendChild(lineEl);
+        });
+      openBody.appendChild(notesEl);
     } else {
       const noNotes = document.createElement('p');
       noNotes.className = 'task-notes-empty';
       noNotes.textContent = 'No additional notes recorded for this task.';
-      details.appendChild(noNotes);
+      openBody.appendChild(noNotes);
     }
 
     const detailGrid = document.createElement('div');
     detailGrid.className = 'task-detail-grid';
 
     const detailItems = [
-      { label: 'Scheduled Date', value: formatDisplayDate(task.date) },
-      { label: 'Time Window', value: timeText },
-      { label: 'Section & Category', value: `${taskScope === 'personal' ? 'Personal' : 'Work'} • ${cat.label}` },
+      { label: 'Category', value: cat.label },
+      { label: 'Section & Priority', value: `${taskScope === 'personal' ? 'Personal' : 'Work'} • ${prio.label}` },
       {
-        label: 'Status',
+        label: 'Completion Status',
         value: task.completed
           ? 'Completed'
           : task.date < state.selectedDate
@@ -1822,14 +1978,14 @@
       cell.appendChild(val);
       detailGrid.appendChild(cell);
     });
-    details.appendChild(detailGrid);
+    openBody.appendChild(detailGrid);
 
     const detailFooter = document.createElement('div');
     detailFooter.className = 'task-detail-footer';
 
     const detailEditBtn = document.createElement('button');
     detailEditBtn.type = 'button';
-    detailEditBtn.className = 'btn btn-subtle btn-sm';
+    detailEditBtn.className = 'btn btn-primary btn-sm';
     detailEditBtn.textContent = '✎ Edit Task';
     detailEditBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1840,12 +1996,22 @@
     const detailSnooze15 = document.createElement('button');
     detailSnooze15.type = 'button';
     detailSnooze15.className = 'btn btn-subtle btn-sm';
-    detailSnooze15.textContent = '⏰ +15m Follow-up';
+    detailSnooze15.textContent = '⏰ +15m';
     detailSnooze15.addEventListener('click', (e) => {
       e.stopPropagation();
       handleSnoozeTask(task.id, 0.25);
     });
     detailFooter.appendChild(detailSnooze15);
+
+    const detailSnooze2h = document.createElement('button');
+    detailSnooze2h.type = 'button';
+    detailSnooze2h.className = 'btn btn-subtle btn-sm';
+    detailSnooze2h.textContent = '+2h';
+    detailSnooze2h.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleSnoozeTask(task.id, 2);
+    });
+    detailFooter.appendChild(detailSnooze2h);
 
     if (task.date !== state.selectedDate) {
       const detailMoveToday = document.createElement('button');
@@ -1859,74 +2025,41 @@
       detailFooter.appendChild(detailMoveToday);
     }
 
-    details.appendChild(detailFooter);
-    body.appendChild(details);
-
-    const actions = document.createElement('div');
-    actions.className = 'task-actions';
-
-    if (task.date !== state.selectedDate) {
-      const moveTodayBtn = document.createElement('button');
-      moveTodayBtn.type = 'button';
-      moveTodayBtn.className = 'move-today-btn';
-      moveTodayBtn.title = `Move task date to ${formatDisplayDate(state.selectedDate)}`;
-      moveTodayBtn.textContent = '→ Today';
-      moveTodayBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        handleMoveTaskToDate(task.id, state.selectedDate);
-      });
-      actions.appendChild(moveTodayBtn);
-    }
-
-    const snooze15Btn = document.createElement('button');
-    snooze15Btn.type = 'button';
-    snooze15Btn.className = 'snooze-15m-btn';
-    snooze15Btn.title = 'Reschedule / Follow up in 15 minutes (+15m reminder)';
-    snooze15Btn.textContent = '+15m';
-    snooze15Btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleSnoozeTask(task.id, 0.25);
-    });
-
-    const snoozeBtn = document.createElement('button');
-    snoozeBtn.type = 'button';
-    snoozeBtn.className = 'snooze-btn';
-    snoozeBtn.title = 'Reschedule / Follow up in 2 hours';
-    snoozeBtn.textContent = '+2h';
-    snoozeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleSnoozeTask(task.id, 2);
-    });
-
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'icon-btn';
-    editBtn.title = 'Edit task';
-    editBtn.setAttribute('aria-label', `Edit "${task.title}"`);
-    editBtn.appendChild(createSvgIcon(EDIT_ICON, 15));
-    editBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openEditModal(task.id);
-    });
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'icon-btn danger';
-    deleteBtn.title = 'Remove task';
-    deleteBtn.setAttribute('aria-label', `Remove "${task.title}"`);
-    deleteBtn.appendChild(createSvgIcon(DELETE_ICON, 15));
-    deleteBtn.addEventListener('click', (e) => {
+    const detailDeleteBtn = document.createElement('button');
+    detailDeleteBtn.type = 'button';
+    detailDeleteBtn.className = 'btn btn-danger btn-sm fc-detail-delete';
+    detailDeleteBtn.textContent = 'Delete';
+    detailDeleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       handleDeleteTask(task.id);
     });
+    detailFooter.appendChild(detailDeleteBtn);
 
-    actions.appendChild(snoozeBtn);
-    actions.appendChild(editBtn);
-    actions.appendChild(deleteBtn);
+    openBody.appendChild(detailFooter);
+    openCell.appendChild(openHeader);
+    openCell.appendChild(openBody);
 
-    card.appendChild(checkbox);
-    card.appendChild(body);
-    card.appendChild(actions);
+    // Wire Fold / Unfold events on closed summary and open header
+    const handleToggle = () => toggleTaskExpanded(task.id, card, [closedCell, openHeader]);
+    closedCell.addEventListener('click', handleToggle);
+    closedCell.addEventListener('keydown', (e) => {
+      if (e.target !== closedCell) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleToggle();
+      }
+    });
+    openHeader.addEventListener('click', handleToggle);
+    openHeader.addEventListener('keydown', (e) => {
+      if (e.target !== openHeader) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleToggle();
+      }
+    });
+
+    card.appendChild(closedCell);
+    card.appendChild(openCell);
     return card;
   }
 
@@ -1971,7 +2104,9 @@
           els.searchSubInfo.textContent = `Found ${totalVisible} matching task${totalVisible === 1 ? '' : 's'} across all dates (Work & Personal)`;
         }
         if (els.searchList) {
-          els.searchList.replaceChildren(...grouped.all.map((t) => buildTaskCard(t, { showDate: true })));
+          els.searchList.replaceChildren(
+            ...grouped.all.map((t, idx) => buildTaskCard(t, { showDate: true, index: idx + 1 }))
+          );
         }
       }
       updateExpandAllButtonState();
@@ -2000,15 +2135,15 @@
     }
 
     const overdueList = grouped.overdue || [];
-    els.overdueList.replaceChildren(...overdueList.map((t) => buildTaskCard(t)));
+    els.overdueList.replaceChildren(...overdueList.map((t, idx) => buildTaskCard(t, { index: idx + 1 })));
     els.overdueCount.textContent = String(overdueList.length);
     els.overdueSection.hidden = overdueList.length === 0;
 
-    els.scheduledList.replaceChildren(...grouped.scheduled.map((t) => buildTaskCard(t)));
+    els.scheduledList.replaceChildren(...grouped.scheduled.map((t, idx) => buildTaskCard(t, { index: idx + 1 })));
     els.scheduledCount.textContent = String(grouped.scheduled.length);
     els.scheduledSection.hidden = grouped.scheduled.length === 0;
 
-    els.anytimeList.replaceChildren(...grouped.anytime.map((t) => buildTaskCard(t)));
+    els.anytimeList.replaceChildren(...grouped.anytime.map((t, idx) => buildTaskCard(t, { index: idx + 1 })));
     els.anytimeCount.textContent = String(grouped.anytime.length);
     els.anytimeSection.hidden = grouped.anytime.length === 0;
     updateExpandAllButtonState();
@@ -2415,8 +2550,9 @@
         const nextExpand = !allExpanded;
         cards.forEach((cardEl) => {
           const id = cardEl.dataset.taskId;
-          const bodyEl = cardEl.querySelector('.task-body');
-          if (id) toggleTaskExpanded(id, cardEl, bodyEl, nextExpand);
+          const closedEl = cardEl.querySelector('.fc-cell-closed');
+          const openHeaderEl = cardEl.querySelector('.fc-open-header');
+          if (id) toggleTaskExpanded(id, cardEl, [closedEl, openHeaderEl], nextExpand);
         });
       });
     }
@@ -2948,7 +3084,7 @@
     // Viewer Mode Enforcement: allow read-only browsing & card expanding while blocking write controls
     function isViewerAllowedInteraction(target) {
       if (!target || typeof target.closest !== 'function') return false;
-      if (target.closest('.task-checkbox, .task-actions, .task-detail-footer, .timeline-item-actions, #quickAddCard, #dataToolsCard')) {
+      if (target.closest('.task-checkbox, .task-actions, .fc-quick-actions, .task-detail-footer, .timeline-item-actions, #quickAddCard, #dataToolsCard')) {
         return false;
       }
       if (target.closest('#followupCompleteBtn, #followupSnooze15Btn, #followupSnooze1hBtn, #clearCompletedBtn, #moveAllOverdueBtn, #openAddModalBtn, #emptyAddBtn, #emptySampleBtn, #mobileAddFab')) {
@@ -2956,7 +3092,7 @@
       }
       return Boolean(
         target.closest(
-          '#logoutBtn, .date-nav, .scope-switcher, .search-wrap, #searchSection, .view-tabs, #densityToggleBtn, #expandAllBtn, #themeToggleBtn, #notificationToggleBtn, #followupDismissBtn, #filterCategory, #filterPriority, .seg-btn[data-status], #resetFiltersBtn, .task-date-badge, .task-body'
+          '#logoutBtn, .date-nav, .scope-switcher, .search-wrap, #searchSection, .view-tabs, #densityToggleBtn, #expandAllBtn, #themeToggleBtn, #notificationToggleBtn, #followupDismissBtn, #filterCategory, #filterPriority, .seg-btn[data-status], #resetFiltersBtn, .task-date-badge, .fc-cell-closed, .fc-open-header'
         )
       );
     }
