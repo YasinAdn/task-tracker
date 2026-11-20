@@ -6,7 +6,7 @@
     window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* -------------------- Three.js Ambient 3D Scene -------------------- */
+  /* -------------------- Three.js Subtle Sharp Wireframe Depth (No Circles/Blobs) -------------------- */
 
   let threeState = null;
 
@@ -34,142 +34,57 @@
     const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 0, 14);
 
-    // Lighting tailored for soft claymorphism + crisp specular glass rim
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
-    scene.add(ambientLight);
+    const prismGroup = new THREE.Group();
+    scene.add(prismGroup);
 
-    const keyLight = new THREE.DirectionalLight(0x9be85c, 1.35);
-    keyLight.position.set(8, 10, 10);
-    scene.add(keyLight);
+    // Subtle crisp angular wireframe prisms only (zero filled circles, spheres, or round dots)
+    const shards = [];
 
-    const fillLight = new THREE.PointLight(0x38bdf8, 1.4, 35);
-    fillLight.position.set(-9, -4, 6);
-    scene.add(fillLight);
-
-    const rimLight = new THREE.PointLight(0xa855f7, 1.1, 35);
-    rimLight.position.set(9, -7, 4);
-    scene.add(rimLight);
-
-    const shapesGroup = new THREE.Group();
-    scene.add(shapesGroup);
-
-    // Sculpted clay-matte & translucent frosted-glass 3D objects tucked neatly along outer viewport depth
-    const floatingShapes = [];
-
-    function addSculptedMesh(geometry, material, pos, rotSpeed, floatOffset, amp) {
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(pos[0], pos[1], pos[2]);
-      shapesGroup.add(mesh);
-      floatingShapes.push({
-        mesh,
+    function addCrystalEdges(geometry, colorHex, opacity, pos, rotSpeed, scale) {
+      const edgesGeo = new THREE.EdgesGeometry(geometry);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity
+      });
+      const lines = new THREE.LineSegments(edgesGeo, lineMat);
+      lines.position.set(pos[0], pos[1], pos[2]);
+      lines.scale.setScalar(scale);
+      prismGroup.add(lines);
+      shards.push({
+        mesh: lines,
+        material: lineMat,
         baseY: pos[1],
-        baseX: pos[0],
         rotX: rotSpeed[0],
         rotY: rotSpeed[1],
-        offset: floatOffset,
-        amp
+        rotZ: rotSpeed[2]
       });
-      return mesh;
     }
 
-    // 1. Matte Clay Torus (Top-Left depth)
-    addSculptedMesh(
-      new THREE.TorusGeometry(1.55, 0.46, 20, 48),
-      new THREE.MeshStandardMaterial({
-        color: 0x69be28,
-        roughness: 0.46,
-        metalness: 0.08,
-        transparent: true,
-        opacity: 0.34
-      }),
-      [-7.8, 3.8, -5.5],
-      [0.0022, 0.0031],
-      0.0,
-      0.35
+    addCrystalEdges(
+      new THREE.OctahedronGeometry(2.1, 0),
+      0x69be28,
+      0.13,
+      [-8.6, 3.6, -6.5],
+      [0.0014, 0.0022, 0.0008],
+      1.0
     );
-
-    // 2. Frosted Glass Crystal Icosahedron (Right-Mid depth)
-    addSculptedMesh(
-      new THREE.IcosahedronGeometry(1.75, 0),
-      new THREE.MeshPhysicalMaterial({
-        color: 0x9be85c,
-        roughness: 0.14,
-        metalness: 0.05,
-        transmission: 0.45,
-        transparent: true,
-        opacity: 0.24
-      }),
-      [8.2, 1.8, -6.0],
-      [0.0018, -0.0028],
-      1.6,
-      0.42
+    addCrystalEdges(
+      new THREE.TetrahedronGeometry(2.0, 0),
+      0x9be85c,
+      0.11,
+      [8.8, -3.4, -7.0],
+      [-0.0016, 0.0019, -0.0011],
+      1.05
     );
-
-    // Crisp outer wireframe halo around crystal
-    addSculptedMesh(
-      new THREE.IcosahedronGeometry(1.85, 0),
-      new THREE.MeshBasicMaterial({
-        color: 0x69be28,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.16
-      }),
-      [8.2, 1.8, -6.0],
-      [0.0018, -0.0028],
-      1.6,
-      0.42
+    addCrystalEdges(
+      new THREE.BoxGeometry(2.2, 2.2, 2.2),
+      0x64748b,
+      0.12,
+      [8.4, 3.8, -8.5],
+      [0.0011, -0.0017, 0.0013],
+      0.95
     );
-
-    // 3. Pillowy Clay Sphere (Bottom-Left depth)
-    addSculptedMesh(
-      new THREE.SphereGeometry(1.3, 28, 28),
-      new THREE.MeshStandardMaterial({
-        color: 0x10b981,
-        roughness: 0.5,
-        metalness: 0.06,
-        transparent: true,
-        opacity: 0.28
-      }),
-      [-7.4, -4.1, -6.5],
-      [0.0014, 0.0019],
-      3.1,
-      0.3
-    );
-
-    // 4. Sculpted Knot (Bottom-Right depth)
-    addSculptedMesh(
-      new THREE.TorusKnotGeometry(1.05, 0.3, 64, 12),
-      new THREE.MeshStandardMaterial({
-        color: 0xa855f7,
-        roughness: 0.38,
-        metalness: 0.18,
-        transparent: true,
-        opacity: 0.24
-      }),
-      [7.6, -3.7, -6.2],
-      [-0.002, 0.0024],
-      4.5,
-      0.32
-    );
-
-    // Ambient floating dust motes across 3D volume
-    const particleCount = 72;
-    const positions = new Float32Array(particleCount * 3);
-    for (let i = 0; i < particleCount; i += 1) {
-      positions[i * 3] = (Math.random() - 0.5) * 24;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 14;
-      positions[i * 3 + 2] = -2 - Math.random() * 9;
-    }
-    const particleGeo = new THREE.BufferGeometry();
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const particleMat = new THREE.PointsMaterial({
-      color: 0x9be85c,
-      size: 0.075,
-      transparent: true,
-      opacity: 0.42
-    });
-    const particles = new THREE.Points(particleGeo, particleMat);
-    scene.add(particles);
 
     let pointerX = 0;
     let pointerY = 0;
@@ -197,24 +112,22 @@
       }
       const elapsed = clock.getElapsedTime();
 
-      currentX += (pointerX * 0.65 - currentX) * 0.04;
-      currentY += (-pointerY * 0.45 - currentY) * 0.04;
-      const scrollBias = (window.scrollY || 0) * 0.0012;
+      currentX += (pointerX * 0.55 - currentX) * 0.045;
+      currentY += (-pointerY * 0.4 - currentY) * 0.045;
+      const scrollBias = (window.scrollY || 0) * 0.001;
 
-      shapesGroup.position.x = currentX;
-      shapesGroup.position.y = currentY + scrollBias;
-      shapesGroup.rotation.y = currentX * 0.06;
-      shapesGroup.rotation.x = currentY * 0.04;
+      prismGroup.position.x = currentX;
+      prismGroup.position.y = currentY + scrollBias;
+      prismGroup.rotation.y = currentX * 0.05;
+      prismGroup.rotation.x = currentY * 0.035;
 
-      for (let i = 0; i < floatingShapes.length; i += 1) {
-        const item = floatingShapes[i];
-        item.mesh.rotation.x += item.rotX;
-        item.mesh.rotation.y += item.rotY;
-        item.mesh.position.y = item.baseY + Math.sin(elapsed * 0.65 + item.offset) * item.amp;
+      for (let i = 0; i < shards.length; i += 1) {
+        const s = shards[i];
+        s.mesh.rotation.x += s.rotX;
+        s.mesh.rotation.y += s.rotY;
+        s.mesh.rotation.z += s.rotZ;
+        s.mesh.position.y = s.baseY + Math.sin(elapsed * 0.55 + i * 2.1) * 0.25;
       }
-
-      particles.rotation.y = elapsed * 0.015 + currentX * 0.03;
-      particles.rotation.x = currentY * 0.02;
 
       renderer.render(scene, camera);
       rafId = requestAnimationFrame(tick);
@@ -227,30 +140,169 @@
       }
     });
 
-    threeState = {
-      floatingShapes,
-      particleMat,
-      ambientLight
-    };
-
+    threeState = { shards };
     rafId = requestAnimationFrame(tick);
   }
 
   function setTheme(theme) {
     if (!threeState) return;
     const isLight = theme === 'light';
-    threeState.ambientLight.intensity = isLight ? 0.95 : 0.65;
-    threeState.particleMat.color.setHex(isLight ? 0x4b9c12 : 0x9be85c);
-    threeState.particleMat.opacity = isLight ? 0.34 : 0.42;
+    threeState.shards.forEach((s, idx) => {
+      if (idx < 2) {
+        s.material.opacity = isLight ? 0.16 : 0.12;
+      } else {
+        s.material.opacity = isLight ? 0.14 : 0.11;
+      }
+    });
   }
 
-  /* -------------------- GSAP Choreographed Animations -------------------- */
+  /* -------------------- GSAP Choreographed & Tactile Animations -------------------- */
 
   function hasGsap() {
     return !prefersReducedMotion && typeof window !== 'undefined' && typeof window.gsap !== 'undefined';
   }
 
   let entrancePlayed = false;
+  let interactiveWired = false;
+
+  const INTERACTIVE_BTN_SELECTOR = [
+    '.btn',
+    '.icon-btn',
+    '.pill-btn',
+    '.seg-btn',
+    '.scope-btn',
+    '.scope-form-btn',
+    '.view-tab',
+    '.density-toggle-btn',
+    '.template-btn',
+    '.now-pill-btn',
+    '.snooze-btn',
+    '.snooze-15m-btn',
+    '.move-today-btn',
+    '.sidebar-toggle-btn',
+    '.link-btn',
+    '.mobile-add-fab',
+    '.task-date-badge',
+    '.fc-fold-pill'
+  ].join(', ');
+
+  const GLASS_GLARE_SELECTOR = '.card, .schedule-panel, .task-card.folding-card, .modal-card, .login-card';
+
+  function wireInteractiveMotion() {
+    if (interactiveWired || !hasGsap()) return;
+    interactiveWired = true;
+
+    const gsap = window.gsap;
+
+    // 1. Tactile GSAP spring animations on EVERY button, pill, tab, and control
+    document.addEventListener('pointerover', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest(INTERACTIVE_BTN_SELECTOR) : null;
+      if (!btn || btn.disabled) return;
+      if (btn.contains(e.relatedTarget)) return;
+
+      gsap.killTweensOf(btn);
+      gsap.to(btn, {
+        y: -1.5,
+        scale: 1.03,
+        duration: 0.2,
+        ease: 'power2.out',
+        overwrite: 'auto'
+      });
+    }, true);
+
+    document.addEventListener('pointerout', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest(INTERACTIVE_BTN_SELECTOR) : null;
+      if (!btn) return;
+      if (btn.contains(e.relatedTarget)) return;
+
+      gsap.killTweensOf(btn);
+      gsap.to(btn, {
+        y: 0,
+        scale: 1,
+        duration: 0.24,
+        ease: 'power2.out',
+        clearProps: 'transform'
+      });
+    }, true);
+
+    document.addEventListener('pointerdown', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest(INTERACTIVE_BTN_SELECTOR) : null;
+      if (btn && !btn.disabled) {
+        gsap.killTweensOf(btn);
+        gsap.to(btn, {
+          y: 1,
+          scale: 0.94,
+          duration: 0.09,
+          ease: 'power2.out'
+        });
+        return;
+      }
+
+      const card = e.target && e.target.closest ? e.target.closest('.folding-card .fc-cell-closed') : null;
+      if (card) {
+        const outerCard = card.closest('.folding-card');
+        if (outerCard) {
+          gsap.to(outerCard, { scale: 0.99, duration: 0.1, ease: 'power2.out' });
+        }
+      }
+    }, true);
+
+    document.addEventListener('pointerup', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest(INTERACTIVE_BTN_SELECTOR) : null;
+      if (btn && !btn.disabled) {
+        gsap.killTweensOf(btn);
+        gsap.to(btn, {
+          y: -1,
+          scale: 1.02,
+          duration: 0.22,
+          ease: 'back.out(2.2)',
+          clearProps: 'transform'
+        });
+      }
+
+      const outerCard = e.target && e.target.closest ? e.target.closest('.folding-card') : null;
+      if (outerCard) {
+        gsap.to(outerCard, { scale: 1, duration: 0.24, ease: 'back.out(1.6)', clearProps: 'transform' });
+      }
+    }, true);
+
+    // 2. Smooth GSAP card hover elevation + Liquid Glass specular cursor tracking across cards/panels
+    document.addEventListener('pointerover', (e) => {
+      const card = e.target && e.target.closest ? e.target.closest('.folding-card, .stat-box') : null;
+      if (!card || card.contains(e.relatedTarget)) return;
+
+      gsap.to(card, {
+        y: -2.5,
+        duration: 0.24,
+        ease: 'power2.out',
+        overwrite: 'auto'
+      });
+    }, true);
+
+    document.addEventListener('pointerout', (e) => {
+      const card = e.target && e.target.closest ? e.target.closest('.folding-card, .stat-box') : null;
+      if (!card || card.contains(e.relatedTarget)) return;
+
+      gsap.to(card, {
+        y: 0,
+        duration: 0.28,
+        ease: 'power2.out',
+        clearProps: 'transform'
+      });
+    }, true);
+
+    // Pointer-tracked liquid glass edge refraction on panels, cards & form fields
+    document.addEventListener('pointermove', (e) => {
+      const surface = e.target && e.target.closest ? e.target.closest(GLASS_GLARE_SELECTOR) : null;
+      if (!surface) return;
+      const rect = surface.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const xPct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+      const yPct = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+      surface.style.setProperty('--glint-x', `${xPct.toFixed(1)}%`);
+      surface.style.setProperty('--glint-y', `${yPct.toFixed(1)}%`);
+    }, { passive: true });
+  }
 
   function animateEntrance() {
     if (entrancePlayed || !hasGsap()) return;
@@ -289,7 +341,6 @@
     const cards = rootEl.querySelectorAll('.folding-card');
     if (!cards || cards.length === 0) return;
 
-    // Limit stagger wave cleanly so large lists feel snappy
     const animatedTargets = Array.from(cards).slice(0, 14);
     window.gsap.killTweensOf(animatedTargets);
     window.gsap.fromTo(
@@ -367,6 +418,7 @@
     initThreeBackground();
     const initialTheme = document.documentElement.getAttribute('data-theme') || 'dark';
     setTheme(initialTheme);
+    wireInteractiveMotion();
     animateEntrance();
   }
 
